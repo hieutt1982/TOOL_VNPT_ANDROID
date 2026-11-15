@@ -33,9 +33,15 @@ function log(...a){
 function stepLog(...a){
   const s=a.map(x=>typeof x==="string"?x:JSON.stringify(x)).join(" ");
   const stamp=new Date().toLocaleTimeString("vi-VN",{hour12:false});
-  const line=`[${stamp}] ${s}`;
+  const line=`[${stamp}]`+"\n"+s;
   console.log(line); logs.push(line); if(logs.length>MAX_LOGS) logs.shift();
 }
+async function timedStep(name,action){
+  const startedAt=Date.now();
+  try{return await action();}
+  finally{stepLog(`⏱ ${name}: ${((Date.now()-startedAt)/1000).toFixed(2)} giây`);}
+}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function storeCookies(headers){
   const sc=headers["set-cookie"]||[];
   for(const c of sc){
@@ -168,39 +174,63 @@ async function configure(o){
   try{
     stepLog("Bắt đầu cấu hình modem");
     if(net.isIP(String(o.ip||""))!==4) throw new Error("IP modem phải là địa chỉ IPv4 hợp lệ.");
-    const mode=String(o.mode||"1"), doSlid=queryBool(o.doSlid), doPppoe=queryBool(o.doPppoe), doWifi=queryBool(o.doWifi);
+    const mode=String(o.mode||"1"), doSlid=queryBool(o.doSlid), doPppoe=queryBool(o.doPppoe);
+    const doWifi5g=queryBool(o.doWifi5g)||queryBool(o.doWifi), doWifi2g=queryBool(o.doWifi2g)||queryBool(o.doWifi);
     if(!["1","2"].includes(mode)) throw new Error("Chế độ đăng nhập chỉ là 1 hoặc 2.");
     if(!o.modemPass) throw new Error("Chưa nhập mật khẩu modem.");
     if(doSlid&&!o.slid) throw new Error("Đã bật SLID nhưng chưa nhập SLID.");
     if(doPppoe&&(!o.pppoeUser||!o.pppoePass)) throw new Error("PPPoE cần có cả tài khoản và mật khẩu.");
-    if(doWifi&&(!o.wifi2g||!o.wifi5g||String(o.pass2g||"").length<8||String(o.pass5g||"").length<8)) throw new Error("Wi-Fi cần có đủ tên mạng và mật khẩu tối thiểu 8 ký tự cho cả hai băng tần.");
-    stepLog("1/4 Đăng nhập modem: đang xử lý");
-    if(mode==="1") await loginFirstReset(o.ip,o.modemPass||"");
-    else await loginNormal(o.ip,o.modemPass||"");
+    if(doWifi2g&&(!o.wifi2g||String(o.pass2g||"").length<8)) throw new Error("Wi-Fi 2.4 GHz cần tên mạng và mật khẩu tối thiểu 8 ký tự.");
+    if(doWifi5g&&(!o.wifi5g||String(o.pass5g||"").length<8)) throw new Error("Wi-Fi 5 GHz cần tên mạng và mật khẩu tối thiểu 8 ký tự.");
+
+    stepLog(mode==="1"?"1/4 Login: POST login.cmd mặc định → POST đổi mật khẩu → POST đăng nhập lại":"1/4 Login: POST login.cmd xác thực");
+    await timedStep("Login",async()=>{
+      if(mode==="1") await loginFirstReset(o.ip,o.modemPass||"");
+      else await loginNormal(o.ip,o.modemPass||"");
+    });
     stepLog("1/4 Đăng nhập modem: xong");
-    if(doSlid){stepLog("2/4 SLID: đang cấu hình");await setSlid(o.ip,o.slid);stepLog("2/4 SLID: xong");} else stepLog("2/4 SLID: bỏ qua");
+    await sleep(1000);
+
+    if(doSlid){
+      stepLog("2/4 SLID: POST gponpasswd.json");
+      await timedStep("SLID",()=>setSlid(o.ip,o.slid));
+      stepLog("2/4 SLID: xong");
+    }else stepLog("2/4 SLID: bỏ qua");
+    await sleep(1000);
+
     if(doPppoe){
-      stepLog("3/4 PPPoE: đang xử lý");
+      stepLog("3/4 PPPoE: POST sendwan.cmd tạo kết nối");
       try{
-        await setPppoe(o.ip,o.pppoeUser,o.pppoePass);
+        await timedStep("PPPoE",()=>setPppoe(o.ip,o.pppoeUser,o.pppoePass));
         stepLog("3/4 PPPoE: xong");
       }catch(e){
         const warning=`PPPoE không hoàn tất: ${e.message||e}`; warnings.push(warning);
         stepLog("⚠️",warning); stepLog("Tiếp tục các bước còn lại.");
       }
-    } else stepLog("3/4 PPPoE: bỏ qua");
-    
-    
-    
-    if(doWifi){
-      stepLog("4/4 Wi-Fi 5 GHz: đang cấu hình");
-      await setWifi(o.ip,1,o.wifi5g,o.pass5g);
-      stepLog("4/4 Wi-Fi 5 GHz: xong");
-      stepLog("4/4 Wi-Fi 2.4 GHz: đang cấu hình");
-      await setWifi(o.ip,0,o.wifi2g,o.pass2g);
-      stepLog("4/4 Wi-Fi 2.4 GHz: xong");
+    }else stepLog("3/4 PPPoE: bỏ qua");
+    await sleep(1000);
 
-    } else stepLog("4/4 Wi-Fi: bỏ qua");
+    if(doWifi5g){
+      stepLog("4/4 Wi-Fi 5 GHz: POST wirelesscfg.json");
+      try{
+        await timedStep("Wi-Fi 5 GHz",()=>setWifi(o.ip,1,o.wifi5g,o.pass5g));
+        stepLog("4/4 Wi-Fi 5 GHz: xong");
+      }catch(e){
+        const warning=`Wi-Fi 5 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
+      }
+    }else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
+
+    if(doWifi2g){
+      if(doWifi5g) await sleep(1000);
+      stepLog("4/4 Wi-Fi 2.4 GHz: POST wirelesscfg.json");
+      try{
+        await timedStep("Wi-Fi 2.4 GHz",()=>setWifi(o.ip,0,o.wifi2g,o.pass2g));
+        stepLog("4/4 Wi-Fi 2.4 GHz: xong");
+      }catch(e){
+        const warning=`Wi-Fi 2.4 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
+      }
+    }else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
+
     stepLog("Hoàn tất cấu hình");
     lastResult={ok:true,warnings};
   }catch(e){
@@ -210,7 +240,6 @@ async function configure(o){
     session_key=null; cookies={}; running=false;
   }
 }
-
 function json(res,obj,status=200){
   const b=Buffer.from(JSON.stringify(obj));
   res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Content-Length":b.length});
@@ -282,12 +311,10 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><label class="step-toggle"><input id="doWifi" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-title"><span class="step">4.</span>WIFI</div>
   <div class="grid">
-    <div><label>WiFi 2.4 GHz</label><input id="wifi2g" value="WiFi 2.4G"></div>
-    <div><label>Mật khẩu WiFi 2.4 GHz</label><input id="pass2g" value="1234567890"></div>
-    <div><label>WiFi 5 GHz</label><input id="wifi5g" value="WiFi 5G"></div>
-    <div><label>Mật khẩu WiFi 5 GHz</label><input id="pass5g" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div><label class="step-toggle"><input id="doWifi2g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2g" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="pass2g" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div><label class="step-toggle"><input id="doWifi5g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 5 GHz</label><input id="wifi5g" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="pass5g" value="1234567890"></div>
   </div>
 </div>
 
@@ -338,7 +365,7 @@ button:disabled{opacity:.45}
       ip:val("ip"),mode:$("mode").value,modemPass:val("modemPass"),slid:val("slid"),
       pppoeUser:val("pppoeUser"),pppoePass:val("pppoePass"),
       wifi2g:val("wifi2g"),pass2g:val("pass2g"),wifi5g:val("wifi5g"),pass5g:val("pass5g"),
-      doSlid:checked("doSlid"),doPppoe:checked("doPppoe"),doWifi:checked("doWifi")
+      doSlid:checked("doSlid"),doPppoe:checked("doPppoe"),doWifi2g:checked("doWifi2g"),doWifi5g:checked("doWifi5g")
     };
     $("status").textContent="⏳ Đang gửi yêu cầu cấu hình...";
     $("status").className="status running";
@@ -389,7 +416,7 @@ function configFromQueryV2(p){
     pppoeUser:p.get("pppoeUser")||"", pppoePass:p.get("pppoePass")||p.get("pppoePassword")||"",
     wifi2g:p.get("wifi2g")||p.get("wifi2gName")||"WiFi 2.4G", pass2g:p.get("pass2g")||p.get("wifi2gPassword")||"",
     wifi5g:p.get("wifi5g")||p.get("wifi5gName")||"WiFi 5G", pass5g:p.get("pass5g")||p.get("wifi5gPassword")||"",
-    doSlid:queryBool(p.get("doSlid")), doPppoe:queryBool(p.get("doPppoe")), doWifi:queryBool(p.get("doWifi"))
+    doSlid:queryBool(p.get("doSlid")), doPppoe:queryBool(p.get("doPppoe")), doWifi:queryBool(p.get("doWifi")), doWifi2g:queryBool(p.get("doWifi2g"))||queryBool(p.get("doWifi")), doWifi5g:queryBool(p.get("doWifi5g"))||queryBool(p.get("doWifi"))
   };
 }
 function startConfigureFromUrlV2(res,u){

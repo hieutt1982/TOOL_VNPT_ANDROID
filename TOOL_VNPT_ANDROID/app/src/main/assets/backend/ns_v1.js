@@ -684,7 +684,7 @@ function log(message) {
 }
 function stepLog(message) {
   const stamp = new Date().toLocaleTimeString("vi-VN", { hour12: false });
-  const line = `[${stamp}] ${String(message)}`;
+  const line = `[${stamp}]` + "\n" + String(message);
   console.log(line);
   lastLogs.push(line);
   if (lastLogs.length > 250) lastLogs = lastLogs.slice(-250);
@@ -902,12 +902,12 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
   <label>SLID GPON</label><input id="slid" value="A00012345">
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
   <div class="grid">
     <div><label>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div>
     <div><label>VLAN WAN</label><input id="vlan" value="11"></div>
@@ -919,8 +919,8 @@ button:disabled{opacity:.45}
 <div class="card">
   <div class="section-title"><span class="step">4.</span>WIFI</div>
   <div class="grid">
-    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div><label class="step-toggle"><input id="doWifi2g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2gName" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="wifi2gPassword" value="1234567890"></div>
-    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div><label class="step-toggle"><input id="doWifi5g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><label>Tên WiFi 5 GHz</label><input id="wifi5gName" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="wifi5gPassword" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div><label class="step-toggle"><input id="doWifi2g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2gName" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="wifi2gPassword" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div><label class="step-toggle"><input id="doWifi5g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 5 GHz</label><input id="wifi5gName" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="wifi5gPassword" value="1234567890"></div>
   </div>
 </div>
 
