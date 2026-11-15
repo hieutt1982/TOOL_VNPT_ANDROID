@@ -10,9 +10,10 @@ import okhttp3.Cookie;
 import okhttp3.CookieJar;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
+import okhttp3.Protocol;
 
 public final class ApiClient {
-    private static OkHttpClient normal, modem;
+    private static OkHttpClient normal, modem, oneLink;
     private static final CookieJar COOKIE_JAR = new CookieJar() {
         private final Map<String, Map<String, Cookie>> store = new ConcurrentHashMap<>();
         @Override public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
@@ -43,6 +44,19 @@ public final class ApiClient {
             .readTimeout(45, TimeUnit.SECONDS).writeTimeout(45, TimeUnit.SECONDS)
             .followRedirects(false).followSslRedirects(false).build();
         return normal;
+    }
+
+    /** OneLink Node.js original used https.request (HTTP/1.1). Keep the same
+     * protocol and normal certificate validation to avoid protocol differences. */
+    public static synchronized OkHttpClient oneLink() {
+        if (oneLink == null) oneLink = new OkHttpClient.Builder()
+            .cookieJar(COOKIE_JAR)
+            .protocols(Collections.singletonList(Protocol.HTTP_1_1))
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(45, TimeUnit.SECONDS)
+            .writeTimeout(45, TimeUnit.SECONDS)
+            .followRedirects(false).followSslRedirects(false).build();
+        return oneLink;
     }
 
     public static synchronized OkHttpClient modem() throws Exception {
