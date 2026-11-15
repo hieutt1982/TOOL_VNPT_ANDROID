@@ -261,7 +261,7 @@ function html(res){
 body{margin:0;background:#101214;color:#f2f4f7;font-family:Arial,sans-serif;font-size:18px}
 .wrap{max-width:760px;margin:auto;padding:12px}
 .card{background:#1b1f23;border:1px solid #343a40;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 4px 18px #0006}
-.header{padding:18px}.header h1{font-size:26px;margin:0 0 7px}.muted{color:#aeb6bf;font-size:14px;line-height:1.45}
+.header{padding:18px}.header h1{font-size:26px;margin:0 0 7px}.top-menu{display:flex;justify-content:flex-end;margin:8px 0 12px}.top-menu button{width:auto;margin:0;padding:10px 18px;font-size:16px}.muted{color:#aeb6bf;font-size:14px;line-height:1.45}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section-head .section-title{margin:0}.step-toggle{display:flex;align-items:center;gap:8px;margin:0;white-space:nowrap;font-size:14px;font-weight:700;color:#fff}.step-toggle input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;width:18px;height:18px;margin:0;padding:0;flex:none}.step-toggle span{min-width:54px}.section-title{font-size:20px;font-weight:700;color:#8fc7ff;margin:0 0 12px}
 .step{display:inline-block;min-width:30px;margin-right:7px;color:#fff}
 label{display:block;margin:11px 0 5px;font-weight:700}
@@ -279,11 +279,7 @@ button:disabled{opacity:.45}
 .note{margin-top:8px;color:#aeb6bf;font-size:13px;line-height:1.4}
 @media(max-width:520px){.grid{grid-template-columns:1fr}body{font-size:17px}.wrap{padding:9px}.card{padding:14px}.header h1{font-size:24px}}
 #status{display:none!important}</style></head><body><div class="wrap">
-<div class="card header">
-  <h1>[Trần Trung Hiếu]</h1><h2>MODEM GPON NS_V2</h2>
-  
-  
-</div>
+<div class="top-menu"><button type="button" onclick="location.href='index.html'">☰ MENU</button></div>
 
 <div class="card">
   <div class="section-title"><span class="step">1.</span>ĐĂNG NHẬP MODEM</div>
