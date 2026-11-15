@@ -20,8 +20,6 @@ let pass_wifi_2g = "";
 let name_wifi_5g = "";
 let pass_wifi_5g = "";
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
 // Giống urllib.parse.quote(..., safe="")
 function quote(v) {
   return encodeURIComponent(String(v));
@@ -397,7 +395,6 @@ payload["CsrfToken"] = csrf_token;
   // Firmware often leaves the password input blank in its HTML response, so
   // checking for the submitted password creates a false failure. Read back
   // the SSID from the modem's current 2.4 GHz settings instead.
-  await sleep(1200);
   const verifyUrl = `https://${MODEM_IP}/cgi-bin/net-wlan.asp`;
   const verifyHtml = await runRequest("GET", verifyUrl, {
     "Cookie": `ecntToken=${ecnt_token}`,
@@ -513,7 +510,6 @@ async function wan_delete_pppoe(ecnt_token,vlan_id='11') {
 
   console.log(`\n🗑️ XÓA PPPoE VLAN ${target.vlan}/${target.priority}`);
   await postModemForm('/cgi-bin/net-wanset.asp',p,ecnt_token,{'User-Agent':'Mozilla/5.0','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'vi,en-US;q=0.9,en;q=0.8'});
-  await sleep(1500);
   const after=await get_wan_list(ecnt_token);
   const still=after.list.some(w=>w.domain===target.domain && String(w.vlan)===String(vlan_id) && /ppp/i.test(w.encap));
   if(still) throw new Error(`Modem vẫn còn PPPoE VLAN ${vlan_id} sau lệnh xóa; không tạo mới để tránh trùng.`);
@@ -538,7 +534,6 @@ async function wan_new_pppoe(ecnt_token,user_ppp,pass_ppp,vlan_id='11') {
   p.pppUserName=user_ppp; p.pppPassword=pass_ppp;
   console.log(`\n📤 TẠO PPPoE | VLAN ${vlan_id} | IFIdx=${next}`);
   const out=await postModemForm('/cgi-bin/net-wanset.asp',p,ecnt_token,{'User-Agent':'Mozilla/5.0','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'vi,en-US;q=0.9,en;q=0.8'});
-  await sleep(1500);
   const after=await get_wan_list(ecnt_token);
   const created=after.list.find(w=>String(w.vlan)===String(vlan_id)&&/ppp/i.test(w.encap));
   if(!created) throw new Error(`CREATE PPPoE VLAN ${vlan_id} thất bại`);
@@ -817,7 +812,6 @@ async function configureModem(cfg) {
     if (!token) throw new Error("LOGIN admin/admin FAIL");
     const changed = await change_first_pass(token, PASSWORD_NEW, PASSWORD_NEW);
     if (changed === null) throw new Error("ĐỔI PASSWORD FAIL");
-    await sleep(1500);
     token = await login_and_get_etoken(USERNAME, PASSWORD_NEW);
     if (!token) throw new Error("LOGIN LẠI BẰNG PASS MỚI FAIL");
     PASSWORD = PASSWORD_NEW;
@@ -841,7 +835,6 @@ async function configureModem(cfg) {
       const deleted = await wan_delete_pppoe(token, vlan_id);
       if (!deleted) stepLog(`3/4 PPPoE: không có kết nối VLAN ${vlan_id} cũ`);
       await wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id);
-      await sleep(1500);
       stepLog("3/4 PPPoE: xong");
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
