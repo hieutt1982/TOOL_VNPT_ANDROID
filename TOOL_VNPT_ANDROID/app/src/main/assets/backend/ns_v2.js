@@ -22,19 +22,21 @@ let session_key=null;
 let cookies={};
 let running=false;
 let logs=[];
+let rawLogs=[];
 let currentIP="";
 let lastResult=null;
 const MAX_LOGS=500;
 
 function log(...a){
   const s=a.map(x=>typeof x==="string"?x:JSON.stringify(x)).join(" ");
-  console.log(s);
+  const line=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n${s}`; rawLogs.push(line); if(rawLogs.length>MAX_LOGS) rawLogs.shift();
+  console.log(line);
 }
 function stepLog(...a){
   const s=a.map(x=>typeof x==="string"?x:JSON.stringify(x)).join(" ");
   const stamp=new Date().toLocaleTimeString("vi-VN",{hour12:false});
   const line=`[${stamp}]`+"\n"+s;
-  console.log(line); logs.push(line); if(logs.length>MAX_LOGS) logs.shift();
+  console.log(line); logs.push(line); rawLogs.push(line); if(logs.length>MAX_LOGS) logs.shift(); if(rawLogs.length>MAX_LOGS) rawLogs.shift();
 }
 async function timedStep(name,action){
   const startedAt=Date.now();
@@ -55,7 +57,9 @@ function formEncode(obj){
 }
 function request(method,url,body="",headers={}){
   return new Promise((resolve,reject)=>{
-    const u=new URL(url), h={...headers};
+    const started=Date.now(), u=new URL(url), h={...headers};
+    const rawLine=m=>{const t=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n${m}`;rawLogs.push(t);if(rawLogs.length>MAX_LOGS)rawLogs.shift();};
+    rawLine(`[API>] ${method} ${u.pathname}${u.search} body=${body?Buffer.byteLength(body)+" byte (đã ẩn)":"(trống)"}`);
     if(body) h["Content-Length"]=Buffer.byteLength(body);
     const ck=cookieHeader(); if(ck) h.Cookie=ck;
     const req=https.request({
@@ -64,10 +68,10 @@ function request(method,url,body="",headers={}){
     },res=>{
       const chunks=[];
       res.on("data",c=>chunks.push(c));
-      res.on("end",()=>{storeCookies(res.headers); resolve({status:res.statusCode,headers:res.headers,text:Buffer.concat(chunks).toString("utf8")});});
+      res.on("end",()=>{storeCookies(res.headers); const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${u.pathname}${u.search} => ${res.statusCode}; response=${Buffer.byteLength(text)} byte; ${Date.now()-started} ms`); resolve({status:res.statusCode,headers:res.headers,text});});
     });
     req.on("timeout",()=>req.destroy(new Error("TIMEOUT")));
-    req.on("error",reject);
+    req.on("error",e=>{rawLine(`[API!] ${method} ${u.pathname}${u.search}: ${e.message}`);reject(e);});
     if(body) req.write(body);
     req.end();
   });
@@ -296,12 +300,12 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
   <label>SLID GPON</label><input id="slid" value="A00012345">
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
   <div class="grid">
     <div><label>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div>
     <div><label>VLAN WAN</label><input value="11" disabled></div>
@@ -325,6 +329,7 @@ button:disabled{opacity:.45}
 
 <div class="card">
   <div class="section-title">📋 NHẬT KÝ</div>
+  <div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div>
   <pre id="logs" class="log">Chưa có log.</pre>
 </div>
 </div>
@@ -338,7 +343,8 @@ button:disabled{opacity:.45}
     try{
       var r=await fetch('${API_PREFIX}/api/status',{cache:"no-store"});
       var d=await r.json();
-      $("logs").textContent=(d.logs&&d.logs.length)?d.logs.join("\\n"):"Chưa có log.";
+      var shown=document.querySelector("input[name=logMode]:checked").value==="raw"?d.rawLogs:d.logs;
+      $("logs").textContent=(shown&&shown.length)?shown.join("\\n"):"Chưa có log.";
       $("status").textContent=d.running?"⏳ ĐANG CẤU HÌNH...":(d.result&&d.result.ok===false?"❌ "+d.result.error:(d.result&&d.result.warnings&&d.result.warnings.length?"⚠️ Hoàn tất nhưng có bước bị bỏ qua.":(d.result?"✅ Cấu hình hoàn tất":"Sẵn sàng.")));
       $("status").className=d.running?"status running":(d.result&&d.result.ok===false?"status err":"status ok");
       $("run").disabled=!!d.running;
@@ -379,7 +385,9 @@ button:disabled{opacity:.45}
       $("status").className="status err";
     }
   });
-  // Xóa nhật ký cũ khi mở form; dùng endpoint clear sẵn có.
+  document.querySelectorAll("input[name=logMode]").forEach(function(el){el.addEventListener("change",refresh);});
+  $("copyLogs").addEventListener("click",async function(){var t=$("logs").textContent;try{await navigator.clipboard.writeText(t);}catch(e){var x=document.createElement("textarea");x.value=t;document.body.appendChild(x);x.select();document.execCommand("copy");x.remove();}});
+  $("clearLogs").addEventListener("click",async function(){await fetch('${API_PREFIX}/api/logs/clear',{method:'POST',cache:'no-store'});refresh();});
   fetch('${API_PREFIX}/api/logs/clear',{method:'POST',cache:'no-store'}).then(refresh).catch(refresh);
 })();
 </script></body></html>`);
@@ -400,12 +408,12 @@ function configurePageV2(res){
   const prefix=NS_V2_EMBED?"/nsv2":"";
   const body=`<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>NS V2 - Nhật ký cấu hình</title><style>
-  *{box-sizing:border-box}body{margin:0;background:#101418;color:#eef2f6;font:16px Arial,sans-serif}main{max-width:850px;margin:24px auto;padding:12px}
+  *{box-sizing:border-box}body{margin:0;background:#101418;color:#eef2f6;font:16px Arial,sans-serif}main{max-width:850px;margin:24px auto;padding:12px}.log-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}.log-tools label{display:flex;gap:5px;align-items:center;font-size:14px}.log-tools button{background:#2a3948;color:#eef2f6;border:1px solid #526273;border-radius:7px;padding:8px 12px;font-weight:bold}
   .card{background:#1b222a;border:1px solid #35404c;border-radius:14px;padding:18px}h2{margin:0 0 8px;font-size:22px}.muted{color:#aab6c2;font-size:13px}
   .status{margin:14px 0;padding:12px;border-radius:9px;background:#111820;color:#ffd166;font-weight:bold}pre{margin:0;height:65vh;min-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#080c10;border-radius:9px;padding:14px;color:#d8e4ef;font:13px/1.55 Consolas,monospace}
   @media(max-width:600px){main{margin:0;padding:8px}.card{padding:12px}pre{height:72vh}}
-  #status{display:none!important}</style></head><body><main><section class="card"><h2>📋 CẤU HÌNH MODEM NS V2</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div><div id="status" class="status">Đang kết nối...</div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
-  <script>(function(){try{history.replaceState(null,'',location.pathname+'?view=1')}catch(e){}const s=document.getElementById('status'),l=document.getElementById('logs');async function refresh(){try{const r=await fetch('${prefix}/api/status',{cache:'no-store'});const d=await r.json();l.textContent=d.logs&&d.logs.length?d.logs.join('\\n'):'Chưa có nhật ký.';s.textContent=d.running?'⏳ ĐANG CẤU HÌNH MODEM...':(d.result&&d.result.ok===false?'❌ CẤU HÌNH CÓ LỖI':(d.result&&d.result.warnings&&d.result.warnings.length?'⚠️ HOÀN TẤT NHƯNG CÓ BƯỚC BỊ BỎ QUA':'✅ ĐÃ DỪNG / HOÀN TẤT'));l.scrollTop=l.scrollHeight}catch(e){s.textContent='Mất kết nối nhật ký: '+e.message}}refresh();setInterval(refresh,1000)})();</script>
+  #status{display:none!important}</style></head><body><main><section class="card"><h2>📋 CẤU HÌNH MODEM NS V2</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div><div id="status" class="status">Đang kết nối...</div><div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
+  <script>(function(){try{history.replaceState(null,'',location.pathname+'?view=1')}catch(e){}const s=document.getElementById('status'),l=document.getElementById('logs');async function refresh(){try{const r=await fetch('${prefix}/api/status',{cache:'no-store'});const d=await r.json(),a=document.querySelector('input[name=logMode]:checked').value==='raw'?d.rawLogs:d.logs;l.textContent=a&&a.length?a.join('\\n'):'Chưa có nhật ký.';s.textContent=d.running?'⏳ ĐANG CẤU HÌNH MODEM...':(d.result&&d.result.ok===false?'❌ CẤU HÌNH CÓ LỖI':(d.result&&d.result.warnings&&d.result.warnings.length?'⚠️ HOÀN TẤT NHƯNG CÓ BƯỚC BỊ BỎ QUA':'✅ ĐÃ DỪNG / HOÀN TẤT'));l.scrollTop=l.scrollHeight}catch(e){s.textContent='Mất kết nối nhật ký: '+e.message}}document.querySelectorAll('input[name=logMode]').forEach(x=>x.addEventListener('change',refresh));document.getElementById('copyLogs').addEventListener('click',async()=>{const t=l.textContent;try{await navigator.clipboard.writeText(t)}catch(e){const x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();document.execCommand('copy');x.remove()}});document.getElementById('clearLogs').addEventListener('click',async()=>{await fetch('${prefix}/api/logs/clear',{method:'POST'});refresh()});refresh();setInterval(refresh,1000)})();</script>
   </body></html>`;
   res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Length":Buffer.byteLength(body)});res.end(body);
 }
@@ -441,8 +449,8 @@ const server=http.createServer(async(req,res)=>{
       return startConfigureFromUrlV2(res,u);
     }
     if(req.method==="GET" && u.pathname==="/"){return html(res);}
-    if(req.method==="GET" && u.pathname==="/api/status"){return json(res,{ok:true,running,logs,result:lastResult});}
-    if(req.method==="POST" && u.pathname==="/api/logs/clear"){logs=[];lastResult=null;return json(res,{ok:true});}
+    if(req.method==="GET" && u.pathname==="/api/status"){return json(res,{ok:true,running,logs,rawLogs,result:lastResult});}
+    if(req.method==="POST" && u.pathname==="/api/logs/clear"){logs=[];rawLogs=[];lastResult=null;return json(res,{ok:true});}
     if(req.method==="POST" && u.pathname==="/api/configure"){
       if(running) return json(res,{ok:false,error:"Đang có một cấu hình khác đang chạy."},409);
       const raw=await readBody(req); let data;

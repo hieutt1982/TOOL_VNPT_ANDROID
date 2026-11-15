@@ -49,7 +49,9 @@ function crc32(str) {
 
 function httpsRequest(method, urlString, headers={}, body="") {
   return new Promise((resolve, reject) => {
-    const u = new URL(urlString);
+    const started=Date.now(), u = new URL(urlString);
+    const rawLine=m=>{const t=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n${m}`;rawLogs.push(t);if(rawLogs.length>250)rawLogs=rawLogs.slice(-250);};
+    rawLine(`[API>] ${method} ${u.pathname}${u.search} body=${body?Buffer.byteLength(body)+" byte (đã ẩn)":"(trống)"}`);
     const req = https.request({
       hostname: u.hostname,
       port: u.port || 443,
@@ -61,14 +63,14 @@ function httpsRequest(method, urlString, headers={}, body="") {
     }, res => {
       const chunks = [];
       res.on("data", c => chunks.push(c));
-      res.on("end", () => resolve({
+      res.on("end", () => { const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${u.pathname}${u.search} => ${res.statusCode}; response=${Buffer.byteLength(text)} byte; ${Date.now()-started} ms`); resolve({
         status: res.statusCode,
         headers: res.headers,
-        text: Buffer.concat(chunks).toString("utf8")
-      }));
+        text
+      }); });
     });
     req.on("timeout", () => req.destroy(new Error("TIMEOUT")));
-    req.on("error", reject);
+    req.on("error", e=>{rawLine(`[API!] ${method} ${u.pathname}${u.search}: ${e.message}`);reject(e);});
     if (body) req.write(body);
     req.end();
   });
@@ -676,16 +678,19 @@ const PORT = APP_CONFIG.port;
 const HOST = APP_CONFIG.host;
 let busy = false;
 let lastLogs = [];
+let rawLogs = [];
 let lastResult = null;
 let currentToken = null;
 
 function log(message) {
+  const line=`[${new Date().toLocaleTimeString("vi-VN", {hour12:false})}]\n${String(message)}`; rawLogs.push(line); if(rawLogs.length>250) rawLogs=rawLogs.slice(-250);
   console.log(String(message));
 }
 function stepLog(message) {
   const stamp = new Date().toLocaleTimeString("vi-VN", { hour12: false });
   const line = `[${stamp}]` + "\n" + String(message);
   console.log(line);
+  rawLogs.push(line); if (rawLogs.length > 250) rawLogs = rawLogs.slice(-250);
   lastLogs.push(line);
   if (lastLogs.length > 250) lastLogs = lastLogs.slice(-250);
 }
@@ -931,6 +936,7 @@ button:disabled{opacity:.45}
 
 <div class="card">
   <div class="section-title">📋 NHẬT KÝ</div>
+  <div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div>
   <div id="logs" class="log">Chưa có log.</div>
 </div>
 </div>
@@ -947,7 +953,8 @@ button:disabled{opacity:.45}
       if(!r.ok) throw new Error('HTTP '+r.status);
       var d=await r.json();
       var logs=byId('logs');
-      if(logs) logs.textContent=(d.logs && d.logs.length)?d.logs.join('\\n'):'Chưa có log.';
+      var shown=document.querySelector('input[name=logMode]:checked').value==='raw' ? d.rawLogs : d.logs;
+      if(logs) logs.textContent=(shown && shown.length)?shown.join('\\n'):'Chưa có log.';
       var run=byId('run');
       if(run){
         run.disabled=!!d.busy;
@@ -1013,6 +1020,9 @@ button:disabled{opacity:.45}
     run.addEventListener('click',function(ev){ev.preventDefault();runConfig();});
     setStatus('Sẵn sàng. Nút đã được kết nối.','');
     // Xóa nhật ký phiên trước khi mở form; không ảnh hưởng luồng cấu hình.
+    document.querySelectorAll("input[name=logMode]").forEach(function(el){el.addEventListener("change",refresh);});
+    byId("copyLogs").addEventListener("click",async function(){var t=byId("logs").textContent;try{await navigator.clipboard.writeText(t);}catch(e){var x=document.createElement("textarea");x.value=t;document.body.appendChild(x);x.select();document.execCommand("copy");x.remove();}});
+    byId("clearLogs").addEventListener("click",async function(){await fetch('${API_PREFIX}/api/logs',{method:'DELETE'});refresh();});
     fetch('${API_PREFIX}/api/logs',{method:'DELETE',cache:'no-store'}).then(refresh).catch(refresh);
     setInterval(refresh,1000);
   }
@@ -1028,12 +1038,12 @@ function configurePage(title, apiPrefix) {
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${title} - Nhật ký cấu hình</title><style>
   *{box-sizing:border-box}body{margin:0;background:#101418;color:#eef2f6;font:16px Arial,sans-serif}
-  main{max-width:850px;margin:24px auto;padding:12px}.card{background:#1b222a;border:1px solid #35404c;border-radius:14px;padding:18px}
+  main{max-width:850px;margin:24px auto;padding:12px}.log-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}.log-tools label{display:flex;gap:5px;align-items:center;font-size:14px}.log-tools button{background:#2a3948;color:#eef2f6;border:1px solid #526273;border-radius:7px;padding:8px 12px;font-weight:bold}.card{background:#1b222a;border:1px solid #35404c;border-radius:14px;padding:18px}
   h2{margin:0 0 8px;font-size:22px}.muted{color:#aab6c2;font-size:13px}.status{margin:14px 0;padding:12px;border-radius:9px;background:#111820;color:#ffd166;font-weight:bold}
   pre{margin:0;height:65vh;min-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#080c10;border-radius:9px;padding:14px;color:#d8e4ef;font:13px/1.55 Consolas,monospace}
   @media(max-width:600px){main{margin:0;padding:8px}.card{padding:12px}pre{height:72vh}}
   #status{display:none!important}</style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
-  <div id="status" class="status">Đang kết nối...</div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
+  <div id="status" class="status">Đang kết nối...</div><div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
   (function(){
     // Xóa toàn bộ tham số chứa mật khẩu khỏi thanh địa chỉ sau khi server đã nhận yêu cầu.
@@ -1045,11 +1055,15 @@ function configurePage(title, apiPrefix) {
       const r=await fetch(apiBase+'/api/status',{cache:'no-store'});
       if(!r.ok) throw new Error('HTTP '+r.status+' tại '+apiBase+'/api/status');
       const d=await r.json();
-      logsEl.textContent=(d.logs&&d.logs.length)?d.logs.join('\\n'):'Chưa có nhật ký.';
+      const shown=document.querySelector('input[name=logMode]:checked').value==='raw'?d.rawLogs:d.logs;
+      logsEl.textContent=(shown&&shown.length)?shown.join('\\n'):'Chưa có nhật ký.';
       const active=!!(d.busy===true || d.running===true);
       statusEl.textContent=active?'⏳ ĐANG CẤU HÌNH MODEM...':(d.result&&d.result.ok===false?'❌ CẤU HÌNH CÓ LỖI':(d.result&&d.result.warnings&&d.result.warnings.length?'⚠️ HOÀN TẤT NHƯNG CÓ BƯỚC BỊ BỎ QUA':'✅ ĐÃ DỪNG / HOÀN TẤT'));
       logsEl.scrollTop=logsEl.scrollHeight;
     }catch(e){statusEl.textContent='Mất kết nối nhật ký: '+e.message;} }
+    document.querySelectorAll('input[name=logMode]').forEach(x=>x.addEventListener('change',refresh));
+    document.getElementById('copyLogs').addEventListener('click',async()=>{const t=logsEl.textContent;try{await navigator.clipboard.writeText(t)}catch(e){const x=document.createElement('textarea');x.value=t;document.body.appendChild(x);x.select();document.execCommand('copy');x.remove()}});
+    document.getElementById('clearLogs').addEventListener('click',async()=>{await fetch(apiBase+'/api/logs',{method:'DELETE'});refresh()});
     refresh();setInterval(refresh,1000);
   })();
   </script></body></html>`;
@@ -1098,8 +1112,8 @@ const server = http.createServer(async (req, res) => {
       return startConfigureFromUrl(res, url);
     }
     if (req.method === "GET" && url.pathname === "/") return sendHtml(res, HTML);
-    if (req.method === "GET" && url.pathname === "/api/status") return sendJson(res, 200, {ok:true,busy,logs:lastLogs,result:lastResult});
-    if (req.method === "DELETE" && url.pathname === "/api/logs") { lastLogs=[]; lastResult=null; return sendJson(res,200,{ok:true}); }
+    if (req.method === "GET" && url.pathname === "/api/status") return sendJson(res, 200, {ok:true,busy,logs:lastLogs,rawLogs,result:lastResult});
+    if (req.method === "DELETE" && url.pathname === "/api/logs") { lastLogs=[]; rawLogs=[]; lastResult=null; return sendJson(res,200,{ok:true}); }
     if (req.method === "POST" && url.pathname === "/api/configure") {
       if (busy) return sendJson(res, 409, {ok:false,error:"Đang có một phiên cấu hình khác chạy."});
       const cfg = await getBody(req);
