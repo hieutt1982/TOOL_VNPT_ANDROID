@@ -16,7 +16,7 @@ let logs = [];
 let lastResult = null;
 let activeIp = "";
 let cookies = {};
-const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 1 });
+const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 2 });
 
 function log(message) {
   console.log(String(message));
@@ -104,15 +104,39 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
       res.on("data", chunk => responseChunks.push(chunk));
       res.on("end", () => {
         try {
-          parseCookieHeaders(res.headers);
-          const text = Buffer.concat(responseChunks).toString("utf8");
+          let status = res.statusCode || 0;
+          const headers = { ...res.headers };
+          let text = Buffer.concat(responseChunks).toString("utf8");
+          // The Android bridge can wrap the modem's HTTP response inside an outer HTTP 200 body.
+          const wrapped = text.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})[^\r\n]*\r?\n([\s\S]*)$/i);
+          if (wrapped) {
+            status = Number(wrapped[1]);
+            const inner = wrapped[2];
+            const split = inner.search(/\r?\n\r?\n/);
+            if (split >= 0) {
+              const headerText = inner.slice(0, split);
+              text = inner.slice(split).replace(/^\r?\n\r?\n/, "");
+              const innerCookies = [];
+              for (const line of headerText.split(/\r?\n/)) {
+                const match = line.match(/^([^:]+):\s*(.*)$/);
+                if (!match) continue;
+                const name = match[1].toLowerCase();
+                if (name === "set-cookie") innerCookies.push(match[2]);
+                else headers[name] = match[2];
+              }
+              if (innerCookies.length) headers["set-cookie"] = innerCookies;
+            } else text = inner;
+            log(`[HTTP<] Modem HTTP ${status} được bọc trong phản hồi bridge HTTP ${res.statusCode || 0}`);
+          }
+          responseInfo = { status, headers };
+          parseCookieHeaders(headers);
           rememberJavascriptAuth(text);
-          const setCookie = res.headers["set-cookie"] || [];
+          const setCookie = headers["set-cookie"] || [];
           const setCookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
           const setCookieNames = setCookieList.map(v => String(v).split("=")[0].trim()).join(",") || "(không có)";
-          log(`[HTTP<] ${method} ${path} => ${res.statusCode || 0}; location=${res.headers.location || "(không có)"}; Set-Cookie=${setCookieNames}; body=${text.length} ký tự`);
-          if (res.statusCode >= 400) log(`[HTTP<] Body đầu: ${text.slice(0, 220).replace(/[\r\n\t]+/g, " ")}`);
-          finishResolve({ status: res.statusCode || 0, headers: res.headers, text });
+          log(`[HTTP<] ${method} ${path} => ${status}; location=${headers.location || "(không có)"}; Set-Cookie=${setCookieNames}; body=${text.length} ký tự`);
+          if (status >= 400) log(`[HTTP<] Body đầu: ${text.slice(0, 220).replace(/[\r\n\t]+/g, " ")}`);
+          finishResolve({ status, headers, text });
         } catch (error) {
           log(`[HTTP!] Lỗi xử lý phản hồi ${method} ${path}: ${error && error.stack || error}`);
           finishReject(error);
@@ -1680,19 +1704,16 @@ async function configurePppoe(user, pass, vlan) {
 }
 
 async function prepareWifiBand(band, path, template, ssid, password) {
-  log(`Đang tải trang Wi-Fi ${band} để lấy CSRF`);
+  log(`Wi-Fi ${band}: GET trang để lấy CSRF`);
   const html = await getPage(path);
   const csrf = csrfFrom(html);
   if (!csrf) throw new Error(`Không lấy được CsrfToken Wi-Fi ${band}`);
   const payload = { ...template };
   payload.ESSID = ssid;
-  // Giữ nguyên mật khẩu của các profile SSID phụ đang có trên modem.
   payload.PreSharedKey1 = inputValue(html, "PreSharedKey1") ?? "1234567890";
   payload.PreSharedKey2 = inputValue(html, "PreSharedKey2") ?? "1234567890";
   payload.PreSharedKey3 = password;
-  if (Object.prototype.hasOwnProperty.call(payload, "WDS_Key")) {
-    payload.WDS_Key = inputValue(html, "WDS_Key") ?? "12345678";
-  }
+  if (Object.prototype.hasOwnProperty.call(payload, "WDS_Key")) payload.WDS_Key = inputValue(html, "WDS_Key") ?? "12345678";
   payload.CsrfToken = csrf;
   return { band, path, payload };
 }
@@ -1701,7 +1722,6 @@ async function saveWifiBand(prepared) {
   if (r.status >= 400) throw new Error(`Lưu Wi-Fi ${prepared.band} thất bại: HTTP ${r.status}`);
   log(`Modem đã phản hồi lệnh lưu Wi-Fi ${prepared.band} (HTTP ${r.status})`);
 }
-
 async function configureModem(cfg) {
   const warnings = [];
   activeIp = cfg.ip;
@@ -1732,20 +1752,34 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
   
   if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: tải CSRF cho cả hai băng tần trước khi lưu");
-    const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
-    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-    for (const prepared of [wifi5, wifi2]) {
-      stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đang lưu`);
-      try {
-        await saveWifiBand(prepared);
-        stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đã nhận phản hồi`);
-      } catch (err) {
-        const warning = `Wi-Fi ${prepared.band}: chưa nhận được xác nhận từ modem (${err.message || err})`;
-        warnings.push(warning);
-        stepLog(`⚠️ ${warning}`);
-        if (prepared.band === "5G") stepLog("Vẫn thử gửi cấu hình Wi-Fi 2.4 GHz bằng CSRF đã lấy trước.");
+    stepLog("4/4 Wi-Fi: chạy song song hai cặp GET CSRF → POST cấu hình");
+    const bands = [
+      { band: "5G", name: "5 GHz", run: async () => saveWifiBand(await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword)) },
+      { band: "2.4G", name: "2.4 GHz", run: async () => saveWifiBand(await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword)) }
+    ];
+    for (const item of bands) stepLog(`4/4 Wi-Fi ${item.name}: bắt đầu cặp GET CSRF → POST`);
+    const outcomes = await Promise.allSettled(bands.map(item => item.run()));
+    for (let i = 0; i < bands.length; i++) {
+      const item = bands[i];
+      const outcome = outcomes[i];
+      if (outcome.status === "fulfilled") {
+        stepLog(`4/4 Wi-Fi ${item.name}: đã nhận phản hồi`);
+        continue;
       }
+      let failure = outcome.reason;
+      if (item.band === "2.4G" && /\b401\b/.test(String(failure && failure.message || failure))) {
+        stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
+        try {
+          await ensureSession(cfg.password);
+          const retry = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+          await saveWifiBand(retry);
+          stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
+          continue;
+        } catch (retryError) { failure = retryError; }
+      }
+      const warning = `Wi-Fi ${item.name}: chưa nhận được xác nhận từ modem (${failure && failure.message || failure})`;
+      warnings.push(warning);
+      stepLog(`⚠️ ${warning}`);
     }
   } else {
     stepLog("4/4 Wi-Fi: bỏ qua");

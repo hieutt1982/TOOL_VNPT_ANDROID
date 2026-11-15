@@ -185,14 +185,16 @@ async function postModemForm(path, payload, ecnt_token, extraHeaders={}) {
     "Origin": `https://${MODEM_IP}`,
     ...extraHeaders
   }, body);
-  if (response.status >= 400) throw new Error(`POST ${path} trả HTTP ${response.status}`);
-  console.log(`📥 POST ${path}: modem trả HTTP ${response.status}`);
+  const wrappedStatus = String(response.text || "").match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/i);
+  const modemStatus = wrappedStatus ? Number(wrappedStatus[1]) : response.status;
+  if (modemStatus >= 400) throw new Error(`POST ${path} trả HTTP ${modemStatus}`);
+  console.log(`📥 POST ${path}: modem trả HTTP ${modemStatus}`);
   return response.text;
 }
 
 // ===================== WIFI 5G =====================
-async function config_wifi_5g(ecnt_token, new_ssid="WiFi 5G", new_password="1234567890", csrf_token=null) {
-  if (!csrf_token) csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
+async function config_wifi_5g(ecnt_token, new_ssid="WiFi 5G", new_password="1234567890") {
+  const csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
   if (!csrf_token) throw new Error("Lỗi lấy token Wi-Fi 5G");
 
 const payload = {};
@@ -310,8 +312,8 @@ payload["CsrfToken"] = csrf_token;
 }
 
 // ===================== WIFI 2.4G =====================
-async function config_wifi_2g(ecnt_token, new_ssid="WiFi 2.4G", new_password="1234567890", csrf_token=null) {
-  if (!csrf_token) csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+async function config_wifi_2g(ecnt_token, new_ssid="WiFi 2.4G", new_password="1234567890") {
+  const csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
   if (!csrf_token) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
 
 const payload = {};
@@ -794,25 +796,35 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
 
   if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: lấy CSRF của cả hai băng tần trước khi lưu");
-    const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
-    if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
-    const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
-    if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
-    for (const band of [
-      { name: "5 GHz", run: () => config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5) },
-      { name: "2.4 GHz", run: () => config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2) }
-    ]) {
-      stepLog(`4/4 Wi-Fi ${band.name}: đang gửi lệnh`);
-      try {
-        await band.run();
+    stepLog("4/4 Wi-Fi: chạy song song hai cặp GET CSRF → POST cấu hình");
+    const bands = [
+      { name: "5 GHz", run: () => config_wifi_5g(token, name_wifi_5g, pass_wifi_5g) },
+      { name: "2.4 GHz", run: () => config_wifi_2g(token, name_wifi_2g, pass_wifi_2g) }
+    ];
+    for (const band of bands) stepLog(`4/4 Wi-Fi ${band.name}: bắt đầu cặp GET CSRF → POST`);
+    const outcomes = await Promise.allSettled(bands.map(band => band.run()));
+    for (let i = 0; i < bands.length; i++) {
+      const band = bands[i];
+      const outcome = outcomes[i];
+      if (outcome.status === "fulfilled") {
         stepLog(`4/4 Wi-Fi ${band.name}: đã nhận phản hồi`);
-      } catch (err) {
-        const warning = `Wi-Fi ${band.name}: chưa nhận được xác nhận từ modem (${err.message || err})`;
-        warnings.push(warning);
-        stepLog(`⚠️ ${warning}`);
-        if (band.name === "5 GHz") stepLog("Vẫn thử gửi lệnh Wi-Fi 2.4 GHz bằng CSRF đã lấy trước.");
+        continue;
       }
+      let failure = outcome.reason;
+      if (band.name === "2.4 GHz" && /\b401\b/.test(String(failure && failure.message || failure))) {
+        stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
+        try {
+          token = await login_and_get_etoken(USERNAME, PASSWORD);
+          if (!token) throw new Error("Đăng nhập lại modem thất bại");
+          currentToken = token;
+          await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g);
+          stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
+          continue;
+        } catch (retryError) { failure = retryError; }
+      }
+      const warning = `Wi-Fi ${band.name}: chưa nhận được xác nhận từ modem (${failure && failure.message || failure})`;
+      warnings.push(warning);
+      stepLog(`⚠️ ${warning}`);
     }
   } else stepLog("4/4 Wi-Fi: bỏ qua");
 
