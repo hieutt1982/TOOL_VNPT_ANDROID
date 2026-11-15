@@ -481,48 +481,15 @@ function buildWanPayload(csrf_token,vlan_id) {
   return p;
 }
 
-// ===================== DELETE PPPoE =====================
-async function wan_delete_pppoe(ecnt_token,vlan_id='11') {
-  const before=await get_wan_list(ecnt_token);
-  const target=before.list.find(w=>String(w.vlan)===String(vlan_id)&&/ppp/i.test(w.encap));
-  if(!target){console.log(`ℹ️ Không có PPPoE VLAN ${vlan_id} cần xóa`);return false;}
-  if(target.domain===''||target.ifaceIndex===''){throw new Error('WAN PPPoE mục tiêu thiếu domain hoặc IFIdx.');}
-  if(!before.csrf) throw new Error('Không lấy được CSRF token để xóa PPPoE.');
-
-  const p=buildWanPayload(before.csrf,vlan_id);
-  p.curSetIndex=target.domain;
-  p.wanId=target.domain;
-  p.WanCurrIFIdx=target.ifaceIndex;
-  p.Wan_Flag='3';
-  p.afterdeleteFlag='0';
-  p.OperatorStyle='Del';
-  // These values match the modem's captured Delete submission in the HAR.
-  p.EnCAPFlag='PPPoE';
-  p.ISPTypeValue='0';
-  p.bridgeMode='PPPoE_Bridged';
-  p.enable_dhcp='';
-  p.v8021P='1';
-  p.MulVIDUsed='No';
-  p.pppv6Mode='0';
-  p.enablepd=''; p.PDUsed=''; p.pdmodeUsed='';
-  p.pppbiUsed=''; p.dsliteUsed='';
-  p.pppUserName=user_pppoe; p.pppPassword=pass_pppoe;
-
-  console.log(`\n🗑️ XÓA PPPoE VLAN ${target.vlan}/${target.priority}`);
-  await postModemForm('/cgi-bin/net-wanset.asp',p,ecnt_token,{'User-Agent':'Mozilla/5.0','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'vi,en-US;q=0.9,en;q=0.8'});
-  const after=await get_wan_list(ecnt_token);
-  const still=after.list.some(w=>w.domain===target.domain && String(w.vlan)===String(vlan_id) && /ppp/i.test(w.encap));
-  if(still) throw new Error(`Modem vẫn còn PPPoE VLAN ${vlan_id} sau lệnh xóa; không tạo mới để tránh trùng.`);
-  console.log(`✅ Đã xác nhận xóa PPPoE VLAN ${vlan_id}`);
-  return true;
-}
-
 // ===================== NEW PPPoE =====================
 async function wan_new_pppoe(ecnt_token,user_ppp,pass_ppp,vlan_id='11') {
   const current=await get_wan_list(ecnt_token);
   if(!current.csrf) throw new Error('Không lấy được CSRF token để tạo PPPoE.');
   const existing=current.list.find(w=>String(w.vlan)===String(vlan_id)&&/ppp/i.test(w.encap));
-  if(existing) throw new Error(`PPPoE VLAN ${vlan_id} vẫn đang tồn tại (domain ${existing.domain}); từ chối tạo kết nối trùng.`);
+  if(existing){
+    console.log(`ℹ️ PPPoE VLAN ${vlan_id} đã tồn tại (${existing.name}); giữ nguyên, bỏ qua tạo mới.`);
+    return false;
+  }
   const used=current.list.map(w=>parseInt(w.ifaceIndex,10)).filter(Number.isFinite);
   const storeMatch=current.html.match(/var\s+IFIdxStore\s*=\s*["'](\d+)["']/i);
   const firstCandidate=storeMatch?parseInt(storeMatch[1],10)+1:3;
@@ -831,11 +798,8 @@ async function configureModem(cfg) {
   if (cfg.doPppoe) {
     stepLog("3/4 PPPoE: đang xử lý");
     try {
-      // Không có WAN cũ thì tạo mới; nếu lệnh xóa lỗi thì dừng PPPoE để tránh tạo trùng.
-      const deleted = await wan_delete_pppoe(token, vlan_id);
-      if (!deleted) stepLog(`3/4 PPPoE: không có kết nối VLAN ${vlan_id} cũ`);
-      await wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id);
-      stepLog("3/4 PPPoE: xong");
+      const created = await wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id);
+      stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${vlan_id} đã có, giữ nguyên`);
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
       warnings.push(warning);
