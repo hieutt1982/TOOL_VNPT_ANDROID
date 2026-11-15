@@ -5,11 +5,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -38,9 +41,13 @@ public final class WebBridge {
     private final WebView webView;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private static final String DIAG_FILE = "vnpt_diagnostic.log";
+    private static final Object LOG_LOCK = new Object();
+    private static final int MAX_LOG_CHARS = 900000;
 
     public WebBridge(WebView webView) {
         this.webView = webView;
+        diag("APP", "WebBridge khởi tạo; version=" + version());
     }
 
     /** Generic HTTPS request bridge. */
@@ -64,6 +71,8 @@ public final class WebBridge {
                 }
 
                 JSONObject headers = new JSONObject(headersJson == null ? "{}" : headersJson);
+                diag("HTTP>", httpMethod + " " + parsedUrl + " modem=" + modem + " headers=" + safeHeaders(headers) + " body=" + safeBody(body));
+                long startedAt = System.currentTimeMillis();
                 Request.Builder requestBuilder = new Request.Builder().url(parsedUrl);
                 Iterator<String> names = headers.keys();
                 while (names.hasNext()) {
@@ -89,8 +98,10 @@ public final class WebBridge {
                     result.put("status", response.code());
                     result.put("text", responseText);
                     result.put("headers", headersToJson(response.headers().toMultimap()));
+                    diag("HTTP<", httpMethod + " " + parsedUrl.encodedPath() + " => " + response.code() + " in " + (System.currentTimeMillis()-startedAt) + "ms; headers=" + safeResponseHeaders(response.headers().toMultimap()) + "; body=" + safeBody(responseText));
                 }
             } catch (Exception error) {
+                diag("HTTP!", "request " + url + " failed: " + Log.getStackTraceString(error));
                 putError(result, error);
             }
             deliver(id, result);
@@ -112,6 +123,8 @@ public final class WebBridge {
 
                 String route = incoming.encodedPath();
                 JSONObject headers = new JSONObject(headersJson == null ? "{}" : headersJson);
+                diag("ONELINK>", httpMethod + " " + route + " headers=" + safeHeaders(headers) + " body=" + safeBody(body));
+                long startedAt = System.currentTimeMillis();
 
                 if ("/api/log-login".equals(route) && "POST".equals(httpMethod)) {
                     writeLoginLog(body);
@@ -127,13 +140,15 @@ public final class WebBridge {
                     upstreamRequest = new Request.Builder()
                             .url(UPSTREAM + "/quantri/user/xacthuc_tapdoan_v2")
                             .header("Accept", "application/json")
-                            .header("User-Agent", "Dart/3.10 (dart:io)");
+                            .header("User-Agent", "Dart/3.10 (dart:io)")
+                            ;
                     addPostBody(upstreamRequest, body, headers);
                 } else if ("/api/auth/step2".equals(route) && "POST".equals(httpMethod)) {
                     upstreamRequest = new Request.Builder()
                             .url(UPSTREAM + "/quantri/oauth/token")
                             .header("Accept", "application/json")
-                            .header("User-Agent", "Dart/3.10 (dart:io)");
+                            .header("User-Agent", "Dart/3.10 (dart:io)")
+                            ;
                     addPostBody(upstreamRequest, body, headers);
                 } else if (route.startsWith("/api/modem/") && "GET".equals(httpMethod)) {
                     String targetPath = "/esbx/onelink" + route.substring("/api/modem".length());
@@ -173,8 +188,10 @@ public final class WebBridge {
                     result.put("status", response.code());
                     result.put("text", responseText);
                     result.put("headers", headersToJson(response.headers().toMultimap()));
+                    diag("ONELINK<", route + " => " + response.code() + " in " + (System.currentTimeMillis()-startedAt) + "ms; headers=" + safeResponseHeaders(response.headers().toMultimap()) + "; body=" + safeBody(responseText));
                 }
             } catch (Exception error) {
+                diag("ONELINK!", route + " failed: " + Log.getStackTraceString(error));
                 putError(result, error);
             }
             deliver(id, result);
@@ -254,6 +271,71 @@ public final class WebBridge {
     @JavascriptInterface
     public String version() {
         return "TOOL_VNPT_ANDROID/1.1.1";
+    }
+
+    private String safeHeaders(JSONObject headers) {
+        JSONObject out = new JSONObject();
+        Iterator<String> it = headers.keys();
+        while (it.hasNext()) {
+            String k = it.next();
+            String lower = k.toLowerCase(Locale.US);
+            try { out.put(k, (lower.contains("authorization") || lower.contains("cookie") || lower.contains("token") || lower.contains("secret") || lower.contains("password")) ? "[REDACTED]" : headers.opt(k)); }
+            catch (Exception ignored) {}
+        }
+        return out.toString();
+    }
+
+    private String safeResponseHeaders(java.util.Map<String, java.util.List<String>> headers) {
+        JSONObject out = new JSONObject();
+        for (java.util.Map.Entry<String, java.util.List<String>> e : headers.entrySet()) {
+            String k = e.getKey().toLowerCase(Locale.US);
+            if (k.contains("set-cookie") || k.contains("authorization") || k.contains("token")) continue;
+            try { out.put(k, e.getValue()); } catch (Exception ignored) {}
+        }
+        return out.toString();
+    }
+
+    private String safeBody(String body) {
+        if (body == null || body.isEmpty()) return "(empty)";
+        String v = body.replaceAll("(?i)(\"?(?:password|passwd|pass|otp|secretCode|client_secret|access_token|refresh_token|token)\"?\\s*[:=]\\s*\")([^\"]*)(\")", "$1[REDACTED]$3");
+        v = v.replaceAll("(?i)(password|passwd|otp|secretCode|client_secret|access_token|refresh_token|token)=([^&\\s]+)", "$1=[REDACTED]");
+        return v.length() > 1800 ? v.substring(0, 1800) + "...[truncated]" : v;
+    }
+
+    private void diag(String tag, String message) {
+        String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date()) + " [" + tag + "] " + message + "\n";
+        Log.i("VNPT-DIAG", line.trim());
+        synchronized (LOG_LOCK) {
+            try (FileOutputStream out = webView.getContext().openFileOutput(DIAG_FILE, Context.MODE_APPEND)) {
+                out.write(line.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception e) { Log.e("VNPT-DIAG", "Cannot write diagnostic log", e); }
+        }
+    }
+
+    @JavascriptInterface
+    public String diagnosticLog() {
+        synchronized (LOG_LOCK) {
+            try (FileInputStream in = webView.getContext().openFileInput(DIAG_FILE);
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192]; int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                return out.toString("UTF-8");
+            } catch (Exception e) { return "Chưa có nhật ký: " + e.getMessage(); }
+        }
+    }
+
+    @JavascriptInterface
+    public void clearDiagnosticLog() {
+        synchronized (LOG_LOCK) {
+            try (FileOutputStream out = webView.getContext().openFileOutput(DIAG_FILE, Context.MODE_PRIVATE)) { out.write(new byte[0]); }
+            catch (Exception e) { Log.e("VNPT-DIAG", "Cannot clear diagnostic log", e); }
+        }
+        diag("APP", "Đã xóa nhật ký theo yêu cầu người dùng");
+    }
+
+    @JavascriptInterface
+    public void logFromJs(String level, String message) {
+        diag("JS-" + (level == null ? "LOG" : level), message == null ? "" : message);
     }
 
     public void close() {
