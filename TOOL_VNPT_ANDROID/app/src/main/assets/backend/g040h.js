@@ -1751,41 +1751,31 @@ async function configureModem(cfg) {
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
   
-  if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: lấy CSRF 5 GHz và 2.4 GHz trước khi POST");
+  if (cfg.doWifi5g || cfg.doWifi) {
+    stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
     const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
-    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-    const submit = async prepared => {
-      try {
-        await saveWifiBand(prepared);
-        stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đã nhận phản hồi`);
-      } catch (err) {
-        let failure = err;
-        if (prepared.band === "2.4G" && /\b401\b/.test(String(err.message || err))) {
-          stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
-          try {
-            await ensureSession(cfg.password);
-            const retry = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-            await saveWifiBand(retry);
-            stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
-            return;
-          } catch (retryError) { failure = retryError; }
-        }
-        const warning = `Wi-Fi ${prepared.band}: chưa nhận được xác nhận từ modem (${failure.message || failure})`;
-        warnings.push(warning);
-        stepLog(`⚠️ ${warning}`);
-      }
-    };
-    stepLog("4/4 Wi-Fi 5 GHz: đang POST cấu hình");
-    await submit(wifi5);
-    stepLog("4/4 Wi-Fi: chờ 1 giây trước POST 2.4 GHz");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    stepLog("4/4 Wi-Fi 2.4 GHz: đang POST cấu hình");
-    await submit(wifi2);
-  } else {
-    stepLog("4/4 Wi-Fi: bỏ qua");
-  }
+    try {
+      await saveWifiBand(wifi5);
+      stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
+    } catch (err) {
+      const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
+      warnings.push(warning);
+      stepLog(`⚠️ ${warning}`);
+    }
+  } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
+  if (cfg.doWifi2g || cfg.doWifi) {
+    stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
+    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+    try {
+      await saveWifiBand(wifi2);
+      stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
+    } catch (err) {
+      const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
+      warnings.push(warning);
+      stepLog(`⚠️ ${warning}`);
+    }
+  } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: cfg.ip, warnings };
 }
@@ -1805,6 +1795,8 @@ function configFromQuery(p) {
     pppoePassword: p.get("pppoePassword") || "",
     vlan: p.get("vlan") || "11",
     doWifi: queryBool(p.get("doWifi")),
+    doWifi5g: queryBool(p.get("doWifi5g")) || queryBool(p.get("doWifi")),
+    doWifi2g: queryBool(p.get("doWifi2g")) || queryBool(p.get("doWifi")),
     wifi2gName: p.get("wifi2gName") || "",
     wifi2gPassword: p.get("wifi2gPassword") || "",
     wifi5gName: p.get("wifi5gName") || "",
@@ -1817,10 +1809,10 @@ function validateConfig(c) {
   if (!c.password) throw new Error("Thiếu password (mật khẩu quản trị mới muốn đặt)");
   if (c.doSlid && !c.slid) throw new Error("Đã bật doSlid=1 nhưng chưa có slid");
   if (c.doPppoe && (!c.pppoeUser || !c.pppoePassword)) throw new Error("doPppoe=1 cần pppoeUser và pppoePassword");
-  if (c.doWifi) {
-    if (!c.wifi2gName || !c.wifi5gName) throw new Error("doWifi=1 cần wifi2gName và wifi5gName");
-    if (c.wifi2gPassword.length < 8 || c.wifi5gPassword.length < 8) throw new Error("Mật khẩu Wi-Fi phải có ít nhất 8 ký tự");
-  }
+  const doWifi5g = c.doWifi5g || c.doWifi;
+  const doWifi2g = c.doWifi2g || c.doWifi;
+  if (doWifi5g && (!c.wifi5gName || c.wifi5gPassword.length < 8)) throw new Error("Wi-Fi 5 GHz cần tên mạng và mật khẩu ít nhất 8 ký tự");
+  if (doWifi2g && (!c.wifi2gName || c.wifi2gPassword.length < 8)) throw new Error("Wi-Fi 2.4 GHz cần tên mạng và mật khẩu ít nhất 8 ký tự");
 }
 function configurePage() {
   const apiPrefix = G040H_EMBED ? "/g040h" : "";
@@ -1834,7 +1826,7 @@ function configurePage() {
 <label>Chế độ đăng nhập modem</label><select name="loginMode" id="loginMode"><option value="1">1 - Modem vừa reset / đăng nhập admin/admin</option><option value="2">2 - Modem đã đổi mật khẩu</option></select><label id="passwordLabel">Mật khẩu mới</label><input name="password" id="password" type="text" autocomplete="off" placeholder="Nhập mật khẩu mới cho modem" required></section>
 <section class="card"><div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" name="doSlid" type="checkbox" value="1" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><label>SLID GPON</label><input name="slid" value="A00012345"></section>
 <section class="card"><div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" name="doPppoe" type="checkbox" value="1" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><div class="grid"><div><label>Tài khoản PPPoE</label><input name="pppoeUser" value="ppp_user"></div><div><label>VLAN WAN</label><input name="vlan" value="11"></div></div><label>Mật khẩu PPPoE</label><input name="pppoePassword" value="abcd1234" type="text" autocomplete="off"></section>
-<section class="card"><div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><label class="step-toggle"><input id="doWifi" name="doWifi" type="checkbox" value="1" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><div class="grid"><div><label>WiFi 2.4 GHz</label><input name="wifi2gName" value="WiFi 2.4G"></div><div><label>Mật khẩu WiFi 2.4 GHz</label><input name="wifi2gPassword" value="1234567890" type="text" autocomplete="off"></div><div><label>WiFi 5 GHz</label><input name="wifi5gName" value="WiFi 5G"></div><div><label>Mật khẩu WiFi 5 GHz</label><input name="wifi5gPassword" value="1234567890" type="text" autocomplete="off"></div></div></section>
+<section class="card"><div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><div class="grid"><label class="step-toggle"><input id="doWifi2g" name="doWifi2g" type="checkbox" value="1" onchange="this.nextElementSibling.textContent=this.checked?'Enable 2.4 GHz':'Disable 2.4 GHz'"><span>Disable 2.4 GHz</span></label><label class="step-toggle"><input id="doWifi5g" name="doWifi5g" type="checkbox" value="1" onchange="this.nextElementSibling.textContent=this.checked?'Enable 5 GHz':'Disable 5 GHz'"><span>Disable 5 GHz</span></label></div></div><div class="grid"><div><label>WiFi 2.4 GHz</label><input name="wifi2gName" value="WiFi 2.4G"></div><div><label>Mật khẩu WiFi 2.4 GHz</label><input name="wifi2gPassword" value="1234567890" type="text" autocomplete="off"></div><div><label>WiFi 5 GHz</label><input name="wifi5gName" value="WiFi 5G"></div><div><label>Mật khẩu WiFi 5 GHz</label><input name="wifi5gPassword" value="1234567890" type="text" autocomplete="off"></div></div></section>
 <section class="card"><button id="run" type="submit">▶ BẮT ĐẦU CẤU HÌNH</button><div id="status" class="status">Sẵn sàng.</div></section></form>
 <section class="card"><div class="section-title">📋 NHẬT KÝ</div><pre id="logs" class="log">Chưa có log.</pre></section>
 </main><script>(function(){const mode=document.getElementById("loginMode"),label=document.getElementById("passwordLabel"),password=document.getElementById("password");function updatePasswordLabel(){const first=mode.value==="1";label.textContent=first?"Mật khẩu mới":"Mật khẩu hiện tại";password.placeholder=first?"Nhập mật khẩu mới cho modem":"Nhập mật khẩu hiện tại của modem";password.autocomplete=first?"new-password":"current-password";}mode.addEventListener("change",updatePasswordLabel);updatePasswordLabel();})();</script><script>(function(){"use strict";const prefix=${JSON.stringify(apiPrefix)},form=document.getElementById("configForm"),logs=document.getElementById("logs"),status=document.getElementById("status"),run=document.getElementById("run");async function refresh(){try{const r=await fetch(prefix+"/api/status",{cache:"no-store"});const d=await r.json();logs.textContent=d.logs&&d.logs.length?d.logs.join("\\n"):"Chưa có log.";logs.scrollTop=logs.scrollHeight;status.textContent=d.busy?"⏳ ĐANG CẤU HÌNH MODEM...":(d.result&&d.result.ok===false?"❌ Cấu hình có lỗi.":(d.result&&d.result.warnings&&d.result.warnings.length?"⚠️ Hoàn tất nhưng có bước bị bỏ qua.":(d.result?"✅ Cấu hình hoàn tất.":"Sẵn sàng.")));status.className="status"+(d.busy?" running":(d.result&&d.result.ok===false?" err":""));run.disabled=!!d.busy;}catch(e){status.textContent="Không kết nối được API: "+e.message;status.className="status err";}}form.addEventListener("submit",async function(e){e.preventDefault();const body=new URLSearchParams(new FormData(form));status.textContent="Đang gửi yêu cầu cấu hình...";status.className="status running";try{const r=await fetch(prefix+"/api/configure",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body:body.toString()});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Không thể bắt đầu");await refresh();}catch(err){status.textContent="Lỗi: "+err.message;status.className="status err";}});fetch(prefix+"/api/logs",{method:"DELETE",cache:"no-store"}).then(refresh).catch(refresh);setInterval(refresh,1000);})();</script></body></html>`;

@@ -754,7 +754,9 @@ async function configureModem(cfg) {
   if (!PASSWORD) throw new Error(mode === "1" ? "Mode 1 cần nhập mật khẩu mới" : "Mode 2 cần nhập mật khẩu hiện tại");
   if (cfg.doSlid && !slid_gpon) throw new Error("Đã bật SLID nhưng chưa nhập giá trị");
   if (cfg.doPppoe && (!user_pppoe || !pass_pppoe)) throw new Error("PPPoE cần có cả tài khoản và mật khẩu");
-  if (cfg.doWifi && (!name_wifi_2g || !name_wifi_5g || pass_wifi_2g.length < 8 || pass_wifi_5g.length < 8)) {
+  const doWifi5g = cfg.doWifi5g || cfg.doWifi;
+  const doWifi2g = cfg.doWifi2g || cfg.doWifi;
+  if ((doWifi5g && (!name_wifi_5g || pass_wifi_5g.length < 8)) || (doWifi2g && (!name_wifi_2g || pass_wifi_2g.length < 8))) {
     throw new Error("Wi-Fi cần có đủ tên mạng và mật khẩu tối thiểu 8 ký tự cho cả hai băng tần");
   }
 
@@ -795,14 +797,10 @@ async function configureModem(cfg) {
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
 
-  if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: lấy CSRF 5 GHz và 2.4 GHz trước khi POST");
+  if (cfg.doWifi5g || cfg.doWifi) {
+    stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
     const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
     if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
-    const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
-    if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
-
-    stepLog("4/4 Wi-Fi 5 GHz: đang POST cấu hình");
     try {
       await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5);
       stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
@@ -811,34 +809,21 @@ async function configureModem(cfg) {
       warnings.push(warning);
       stepLog(`⚠️ ${warning}`);
     }
+  } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
-    stepLog("4/4 Wi-Fi: chờ 1 giây trước POST 2.4 GHz");
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    stepLog("4/4 Wi-Fi 2.4 GHz: đang POST cấu hình");
+  if (cfg.doWifi2g || cfg.doWifi) {
+    stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
+    const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+    if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
     try {
       await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2);
       stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
     } catch (err) {
-      let failure = err;
-      if (/\b401\b/.test(String(err.message || err))) {
-        stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
-        try {
-          token = await login_and_get_etoken(USERNAME, PASSWORD);
-          if (!token) throw new Error("Đăng nhập lại modem thất bại");
-          currentToken = token;
-          await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g);
-          stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
-          failure = null;
-        } catch (retryError) { failure = retryError; }
-      }
-      if (failure) {
-        const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${failure.message || failure})`;
-        warnings.push(warning);
-        stepLog(`⚠️ ${warning}`);
-      }
+      const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
+      warnings.push(warning);
+      stepLog(`⚠️ ${warning}`);
     }
-  } else stepLog("4/4 Wi-Fi: bỏ qua");
-
+  } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: MODEM_IP, warnings };
 }
@@ -913,7 +898,7 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><label class="step-toggle"><input id="doWifi" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><div class="grid"><label class="step-toggle"><input id="doWifi2g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable 2.4 GHz':'Disable 2.4 GHz'"><span>Disable 2.4 GHz</span></label><label class="step-toggle"><input id="doWifi5g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable 5 GHz':'Disable 5 GHz'"><span>Disable 5 GHz</span></label></div></div>
   <div class="grid">
     <div><label>WiFi 2.4 GHz</label><input id="wifi2gName" value="WiFi 2.4G"></div>
     <div><label>Mật khẩu WiFi 2.4 GHz</label><input id="wifi2gPassword" value="1234567890"></div>
@@ -989,7 +974,7 @@ button:disabled{opacity:.45}
       vlan:val('vlan'), doPppoe:checked('doPppoe'),
       wifi2gName:val('wifi2gName'), wifi2gPassword:val('wifi2gPassword'),
       wifi5gName:val('wifi5gName'), wifi5gPassword:val('wifi5gPassword'),
-      doWifi:checked('doWifi')
+      doWifi2g:checked('doWifi2g'), doWifi5g:checked('doWifi5g')
     };
     try{
       if(!cfg.ip) throw new Error('Chưa nhập IP modem');
@@ -1069,7 +1054,9 @@ function configFromQuery(params) {
     wifi2gPassword: params.get("wifi2gPassword") || params.get("pass2g") || "",
     wifi5gName: params.get("wifi5gName") || params.get("wifi5g") || "WiFi 5G",
     wifi5gPassword: params.get("wifi5gPassword") || params.get("pass5g") || "",
-    doWifi: queryBool(params.get("doWifi"))
+    doWifi: queryBool(params.get("doWifi")),
+    doWifi2g: queryBool(params.get("doWifi2g")) || queryBool(params.get("doWifi")),
+    doWifi5g: queryBool(params.get("doWifi5g")) || queryBool(params.get("doWifi"))
   };
 }
 
