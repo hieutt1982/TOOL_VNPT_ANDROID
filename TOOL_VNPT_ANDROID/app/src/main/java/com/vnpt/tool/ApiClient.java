@@ -50,7 +50,8 @@ public final class ApiClient {
      * protocol and normal certificate validation to avoid protocol differences. */
     public static synchronized OkHttpClient oneLink() {
         if (oneLink == null) oneLink = new OkHttpClient.Builder()
-            .cookieJar(COOKIE_JAR)
+            // Node https.request() gốc không có CookieJar; không tự gửi cookie
+            // nhận được ở bước 1 sang bước OTP.
             .protocols(Collections.singletonList(Protocol.HTTP_1_1))
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(45, TimeUnit.SECONDS)
