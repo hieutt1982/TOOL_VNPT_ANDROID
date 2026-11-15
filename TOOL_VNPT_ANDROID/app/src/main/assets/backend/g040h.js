@@ -1675,18 +1675,12 @@ async function configurePppoe(user, pass, vlan) {
   payload.CsrfToken = createCsrf;
   const r = await postPage(path, payload);
   if (r.status >= 400) throw new Error(`Lưu PPPoE thất bại: HTTP ${r.status}`);
-  const verifyHtml = await getPage(path);
-  const verifyEntries = wanEntriesFromHtml(verifyHtml);
-  if (verifyEntries && !verifyEntries.some(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === payload.wan_vid)) {
-    throw new Error(`Modem không xác nhận đã tạo PPPoE VLAN ${payload.wan_vid}`);
-  }
-  if (verifyEntries) log(`Đã tạo và xác nhận PPPoE VLAN ${payload.wan_vid}.`);
-  else log(`Đã gửi lệnh tạo PPPoE VLAN ${payload.wan_vid} (HTTP ${r.status}); không đọc được danh sách để xác minh.`);
+  log(`Modem đã phản hồi lệnh tạo PPPoE VLAN ${payload.wan_vid} (HTTP ${r.status}); không tải lại danh sách WAN.`);
   return true;
 }
 
-async function configureWifiBand(band, path, template, ssid, password) {
-  log(`Đang cấu hình Wi-Fi ${band}`);
+async function prepareWifiBand(band, path, template, ssid, password) {
+  log(`Đang tải trang Wi-Fi ${band} để lấy CSRF`);
   const html = await getPage(path);
   const csrf = csrfFrom(html);
   if (!csrf) throw new Error(`Không lấy được CsrfToken Wi-Fi ${band}`);
@@ -1700,9 +1694,12 @@ async function configureWifiBand(band, path, template, ssid, password) {
     payload.WDS_Key = inputValue(html, "WDS_Key") ?? "12345678";
   }
   payload.CsrfToken = csrf;
-  const r = await postPage(path, payload);
-  if (r.status >= 400) throw new Error(`Lưu Wi-Fi ${band} thất bại: HTTP ${r.status}`);
-  log(`Đã gửi lệnh lưu Wi-Fi ${band} (HTTP ${r.status})`);
+  return { band, path, payload };
+}
+async function saveWifiBand(prepared) {
+  const r = await postPage(prepared.path, prepared.payload);
+  if (r.status >= 400) throw new Error(`Lưu Wi-Fi ${prepared.band} thất bại: HTTP ${r.status}`);
+  log(`Modem đã phản hồi lệnh lưu Wi-Fi ${prepared.band} (HTTP ${r.status})`);
 }
 
 async function configureModem(cfg) {
@@ -1735,14 +1732,21 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
   
   if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: chờ modem ổn định");
-    
-    stepLog("4/4 Wi-Fi 5 GHz: đang cấu hình");
-    await configureWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
-    stepLog("4/4 Wi-Fi 5 GHz: xong");
-    stepLog("4/4 Wi-Fi 2.4 GHz: đang cấu hình");
-    await configureWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-    stepLog("4/4 Wi-Fi 2.4 GHz: xong");
+    stepLog("4/4 Wi-Fi: tải CSRF cho cả hai băng tần trước khi lưu");
+    const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
+    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+    for (const prepared of [wifi5, wifi2]) {
+      stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đang lưu`);
+      try {
+        await saveWifiBand(prepared);
+        stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đã nhận phản hồi`);
+      } catch (err) {
+        const warning = `Wi-Fi ${prepared.band}: chưa nhận được xác nhận từ modem (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+        if (prepared.band === "5G") stepLog("Vẫn thử gửi cấu hình Wi-Fi 2.4 GHz bằng CSRF đã lấy trước.");
+      }
+    }
   } else {
     stepLog("4/4 Wi-Fi: bỏ qua");
   }

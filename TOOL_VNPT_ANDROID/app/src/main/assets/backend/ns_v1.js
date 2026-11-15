@@ -178,18 +178,21 @@ function ebooAndBody(payload) {
 
 async function postModemForm(path, payload, ecnt_token, extraHeaders={}) {
   const {body, eboovalue} = ebooAndBody(payload);
-  return await runRequest("POST", `https://${MODEM_IP}${path}`, {
+  const response = await httpsRequest("POST", `https://${MODEM_IP}${path}`, {
     "Content-Type": "application/x-www-form-urlencoded",
     "Cookie": `EBOOVALUE=${eboovalue}; ecntToken=${ecnt_token}`,
     "Referer": `https://${MODEM_IP}${path}`,
     "Origin": `https://${MODEM_IP}`,
     ...extraHeaders
   }, body);
+  if (response.status >= 400) throw new Error(`POST ${path} trả HTTP ${response.status}`);
+  console.log(`📥 POST ${path}: modem trả HTTP ${response.status}`);
+  return response.text;
 }
 
 // ===================== WIFI 5G =====================
-async function config_wifi_5g(ecnt_token, new_ssid="WiFi 5G", new_password="1234567890") {
-  const csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
+async function config_wifi_5g(ecnt_token, new_ssid="WiFi 5G", new_password="1234567890", csrf_token=null) {
+  if (!csrf_token) csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
   if (!csrf_token) throw new Error("Lỗi lấy token Wi-Fi 5G");
 
 const payload = {};
@@ -307,8 +310,8 @@ payload["CsrfToken"] = csrf_token;
 }
 
 // ===================== WIFI 2.4G =====================
-async function config_wifi_2g(ecnt_token, new_ssid="WiFi 2.4G", new_password="1234567890") {
-  const csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+async function config_wifi_2g(ecnt_token, new_ssid="WiFi 2.4G", new_password="1234567890", csrf_token=null) {
+  if (!csrf_token) csrf_token = await get_csrf_token_from_page(ecnt_token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
   if (!csrf_token) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
 
 const payload = {};
@@ -392,22 +395,7 @@ payload["wlanMuMimoUlEnable"] = "on";
 payload["CsrfToken"] = csrf_token;
   console.log(`\n📤 Cấu hình Wi-Fi 2.4G: ${new_ssid}`);
   const stdout = await postModemForm("/cgi-bin/net-wlan.asp", payload, ecnt_token);
-  // Firmware often leaves the password input blank in its HTML response, so
-  // checking for the submitted password creates a false failure. Read back
-  // the SSID from the modem's current 2.4 GHz settings instead.
-  const verifyUrl = `https://${MODEM_IP}/cgi-bin/net-wlan.asp`;
-  const verifyHtml = await runRequest("GET", verifyUrl, {
-    "Cookie": `ecntToken=${ecnt_token}`,
-    "Referer": verifyUrl,
-    "Origin": `https://${MODEM_IP}`,
-    "User-Agent": "Mozilla/5.0"
-  });
-  const savedSsid = extractInputValue(verifyHtml, "wlSsid");
-  if (savedSsid === new_ssid) console.log("\n✅ WIFI 2.4G THÀNH CÔNG! (đã đọc lại SSID từ modem)");
-  else {
-    console.log("\n❌ WIFI 2.4G THẤT BẠI! SSID chưa được xác nhận khi đọc lại modem.");
-    throw new Error("Modem chưa xác nhận đã lưu SSID Wi-Fi 2.4 GHz");
-  }
+  console.log("\n📥 Đã nhận phản hồi HTTP cho lệnh Wi-Fi 2.4G; không tải lại trang để xác minh.");
   return stdout;
 }
 
@@ -501,10 +489,7 @@ async function wan_new_pppoe(ecnt_token,user_ppp,pass_ppp,vlan_id='11') {
   p.pppUserName=user_ppp; p.pppPassword=pass_ppp;
   console.log(`\n📤 TẠO PPPoE | VLAN ${vlan_id} | IFIdx=${next}`);
   const out=await postModemForm('/cgi-bin/net-wanset.asp',p,ecnt_token,{'User-Agent':'Mozilla/5.0','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'vi,en-US;q=0.9,en;q=0.8'});
-  const after=await get_wan_list(ecnt_token);
-  const created=after.list.find(w=>String(w.vlan)===String(vlan_id)&&/ppp/i.test(w.encap));
-  if(!created) throw new Error(`CREATE PPPoE VLAN ${vlan_id} thất bại`);
-  console.log(`✅ CREATE PPPoE OK: ${created.name} | VLAN ${created.vlan}/${created.priority}`);
+  console.log(`📥 Modem đã phản hồi lệnh tạo PPPoE VLAN ${vlan_id}; không tải lại danh sách WAN.`);
   return out;
 }
 
@@ -809,12 +794,26 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
 
   if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi 5 GHz: đang cấu hình");
-    await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g);
-    stepLog("4/4 Wi-Fi 5 GHz: xong");
-    stepLog("4/4 Wi-Fi 2.4 GHz: đang cấu hình");
-    await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g);
-    stepLog("4/4 Wi-Fi 2.4 GHz: xong");
+    stepLog("4/4 Wi-Fi: lấy CSRF của cả hai băng tần trước khi lưu");
+    const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
+    if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
+    const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+    if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
+    for (const band of [
+      { name: "5 GHz", run: () => config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5) },
+      { name: "2.4 GHz", run: () => config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2) }
+    ]) {
+      stepLog(`4/4 Wi-Fi ${band.name}: đang gửi lệnh`);
+      try {
+        await band.run();
+        stepLog(`4/4 Wi-Fi ${band.name}: đã nhận phản hồi`);
+      } catch (err) {
+        const warning = `Wi-Fi ${band.name}: chưa nhận được xác nhận từ modem (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+        if (band.name === "5 GHz") stepLog("Vẫn thử gửi lệnh Wi-Fi 2.4 GHz bằng CSRF đã lấy trước.");
+      }
+    }
   } else stepLog("4/4 Wi-Fi: bỏ qua");
 
   stepLog("Hoàn tất cấu hình");
