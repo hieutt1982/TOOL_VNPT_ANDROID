@@ -18,6 +18,7 @@ let activeIp = "";
 let cookies = {};
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 2 });
 
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function log(message) {
   console.log(String(message));
 }
@@ -27,6 +28,11 @@ function stepLog(message) {
   logs.push(line);
   if (logs.length > MAX_LOGS) logs.shift();
   console.log(line);
+}
+async function timedStep(name, action) {
+  const startedAt = Date.now();
+  try { return await action(); }
+  finally { stepLog(`⏱ ${name}: ${((Date.now() - startedAt) / 1000).toFixed(2)} giây`); }
 }
 function formEncode(obj) {
   const p = new URLSearchParams();
@@ -1728,20 +1734,21 @@ async function configureModem(cfg) {
   lastResult = null;
   stepLog("Bắt đầu cấu hình modem");
   stepLog(cfg.loginMode === "1" ? "1/4 Login: GET / và login.asp → POST đăng nhập → GET/POST đổi mật khẩu → đăng nhập lại" : "1/4 Login: GET / và login.asp → POST xác thực mật khẩu hiện tại");
-  if (cfg.loginMode === "1") {
-    await loginDefaultAndChangePassword(cfg.password);
-  } else {
-    await loginWithCurrentPassword(cfg.password);
-  }
+  await timedStep("Login", async () => {
+    if (cfg.loginMode === "1") await loginDefaultAndChangePassword(cfg.password);
+    else await loginWithCurrentPassword(cfg.password);
+  });
   stepLog("1/4 Đăng nhập modem: xong");
+  await sleep(1000);
 
-  if (cfg.doSlid) { stepLog("2/4 SLID: GET CSRF rồi POST cấu hình"); await configureSlid(cfg.slid); stepLog("2/4 SLID: xong"); }
+  if (cfg.doSlid) { stepLog("2/4 SLID: GET CSRF rồi POST cấu hình"); await timedStep("SLID", () => configureSlid(cfg.slid)); stepLog("2/4 SLID: xong"); }
   else stepLog("2/4 SLID: bỏ qua");
+  await sleep(1000);
 
   if (cfg.doPppoe) {
     try {
       stepLog("3/4 PPPoE: GET danh sách WAN/CSRF rồi POST tạo mới");
-      const created = await configurePppoe(cfg.pppoeUser, cfg.pppoePassword, cfg.vlan);
+      const created = await timedStep("PPPoE", () => configurePppoe(cfg.pppoeUser, cfg.pppoePassword, cfg.vlan));
       stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${cfg.vlan || "11"} đã có, giữ nguyên`);
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
@@ -1750,12 +1757,15 @@ async function configureModem(cfg) {
       stepLog("Bỏ qua lỗi PPPoE và tiếp tục các bước còn lại.");
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
+  await sleep(1000);
   
   if (cfg.doWifi5g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
-    const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
     try {
-      await saveWifiBand(wifi5);
+      await timedStep("Wi-Fi 5 GHz", async () => {
+        const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
+        await saveWifiBand(wifi5);
+      });
       stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
@@ -1765,10 +1775,13 @@ async function configureModem(cfg) {
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
+    if (cfg.doWifi5g || cfg.doWifi) await sleep(1000);
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
-    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
     try {
-      await saveWifiBand(wifi2);
+      await timedStep("Wi-Fi 2.4 GHz", async () => {
+        const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+        await saveWifiBand(wifi2);
+      });
       stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;

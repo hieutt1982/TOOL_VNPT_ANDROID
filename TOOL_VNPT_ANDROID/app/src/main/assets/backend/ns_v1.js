@@ -5,6 +5,7 @@
 "use strict";
 
 const https = require("https");
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 const net = require("net");
 
 let MODEM_IP = "";
@@ -688,6 +689,11 @@ function stepLog(message) {
   lastLogs.push(line);
   if (lastLogs.length > 250) lastLogs = lastLogs.slice(-250);
 }
+async function timedStep(name, action) {
+  const startedAt = Date.now();
+  try { return await action(); }
+  finally { stepLog(`⏱ ${name}: ${((Date.now() - startedAt) / 1000).toFixed(2)} giây`); }
+}
 
 function sendJson(res, status, data) {
   const body = JSON.stringify(data);
@@ -765,32 +771,36 @@ async function configureModem(cfg) {
   stepLog("Bắt đầu cấu hình modem");
   stepLog("1/4 Login: đang xử lý");
   let token;
-  if (mode === "1") {
-    token = await login_and_get_etoken(USERNAME, "admin");
-    if (!token) throw new Error("LOGIN admin/admin FAIL");
-    stepLog("1/4 Login: POST đổi mật khẩu mặc định, sau đó đăng nhập lại");
-    const changed = await change_first_pass(token, PASSWORD_NEW, PASSWORD_NEW);
-    if (changed === null) throw new Error("ĐỔI PASSWORD FAIL");
-    token = await login_and_get_etoken(USERNAME, PASSWORD_NEW);
-    if (!token) throw new Error("LOGIN LẠI BẰNG PASS MỚI FAIL");
-    PASSWORD = PASSWORD_NEW;
-  } else {
-    token = await login_and_get_etoken(USERNAME, PASSWORD);
-    if (!token) throw new Error("LOGIN FAIL");
-  }
+  await timedStep("Login", async () => {
+    if (mode === "1") {
+      token = await login_and_get_etoken(USERNAME, "admin");
+      if (!token) throw new Error("LOGIN admin/admin FAIL");
+      stepLog("1/4 Login: POST đổi mật khẩu mặc định, sau đó đăng nhập lại");
+      const changed = await change_first_pass(token, PASSWORD_NEW, PASSWORD_NEW);
+      if (changed === null) throw new Error("ĐỔI PASSWORD FAIL");
+      token = await login_and_get_etoken(USERNAME, PASSWORD_NEW);
+      if (!token) throw new Error("LOGIN LẠI BẰNG PASS MỚI FAIL");
+      PASSWORD = PASSWORD_NEW;
+    } else {
+      token = await login_and_get_etoken(USERNAME, PASSWORD);
+      if (!token) throw new Error("LOGIN FAIL");
+    }
+  });
   currentToken = token;
   stepLog("1/4 Đăng nhập modem: xong");
+  await sleep(1000);
 
   if (cfg.doSlid) {
     stepLog("2/4 SLID: GET CSRF rồi POST cấu hình");
-    await set_slid(token, slid_gpon);
+    await timedStep("SLID", () => set_slid(token, slid_gpon));
     stepLog("2/4 SLID: xong");
   } else stepLog("2/4 SLID: bỏ qua");
+  await sleep(1000);
 
   if (cfg.doPppoe) {
     stepLog("3/4 PPPoE: GET danh sách WAN/CSRF rồi POST tạo mới");
     try {
-      const created = await wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id);
+      const created = await timedStep("PPPoE", () => wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id));
       stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${vlan_id} đã có, giữ nguyên`);
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
@@ -799,13 +809,16 @@ async function configureModem(cfg) {
       stepLog("Tiếp tục các bước còn lại.");
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
+  await sleep(1000);
 
   if (cfg.doWifi5g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
-    const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
-    if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
     try {
-      await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5);
+      await timedStep("Wi-Fi 5 GHz", async () => {
+        const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
+        if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
+        await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5);
+      });
       stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
@@ -815,11 +828,14 @@ async function configureModem(cfg) {
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
+    if (cfg.doWifi5g || cfg.doWifi) await sleep(1000);
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
-    const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
-    if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
     try {
-      await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2);
+      await timedStep("Wi-Fi 2.4 GHz", async () => {
+        const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+        if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
+        await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2);
+      });
       stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
