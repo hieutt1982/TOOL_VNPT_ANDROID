@@ -879,7 +879,7 @@ button:disabled{opacity:.45}
 .danger{background:#c83d4f}
 .status{padding:12px;border-radius:12px;background:#111418;margin-top:10px;white-space:pre-wrap;min-height:48px;font-weight:700}
 .ok{color:#73e2a3}.err{color:#ff7b8d}.running{color:#ffd166}
-.log{height:300px;overflow:auto;font:14px monospace;line-height:1.45;white-space:pre-wrap;background:#0b0d0f;padding:12px;border-radius:12px}
+.log{height:300px;overflow:auto;font:14px monospace;line-height:1.45;white-space:pre-wrap;background:#0b0d0f;padding:12px;border-radius:12px}.log-tools{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px}.log-modes,.log-actions{display:flex;align-items:center;gap:12px}.log-mode{display:flex!important;align-items:center;gap:8px;margin:0!important;font-size:18px;white-space:nowrap}.log-mode input[type=radio]{width:24px!important;height:24px;margin:0;flex:none}.log-actions{width:100%}.log-actions button{width:50%!important;flex:1;margin:0;padding:12px 8px;font-size:18px}
 .note{margin-top:8px;color:#aeb6bf;font-size:13px;line-height:1.4}
 @media(max-width:520px){.grid{grid-template-columns:1fr}body{font-size:17px}.wrap{padding:9px}.card{padding:14px}.header h1{font-size:24px}}
 #status{display:none!important}</style>
@@ -935,8 +935,7 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-title">📋 NHẬT KÝ</div>
-  <div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div>
+    <div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div>
   <div id="logs" class="log">Chưa có log.</div>
 </div>
 </div>
@@ -1038,12 +1037,12 @@ function configurePage(title, apiPrefix) {
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${title} - Nhật ký cấu hình</title><style>
   *{box-sizing:border-box}body{margin:0;background:#101418;color:#eef2f6;font:16px Arial,sans-serif}
-  main{max-width:850px;margin:24px auto;padding:12px}.log-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}.log-tools label{display:flex;gap:5px;align-items:center;font-size:14px}.log-tools button{background:#2a3948;color:#eef2f6;border:1px solid #526273;border-radius:7px;padding:8px 12px;font-weight:bold}.card{background:#1b222a;border:1px solid #35404c;border-radius:14px;padding:18px}
+  main{max-width:850px;margin:24px auto;padding:12px}.log-tools{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px}.log-modes,.log-actions{display:flex;align-items:center;gap:12px}.log-mode{display:flex!important;align-items:center;gap:8px;margin:0!important;font-size:18px;white-space:nowrap}.log-mode input[type=radio]{width:24px!important;height:24px;margin:0;flex:none}.log-actions{width:100%}.log-actions button{width:50%!important;flex:1;margin:0;padding:12px 8px;font-size:18px}.log-actions button{background:#3478f6;color:#fff;border:0;border-radius:9px;font-weight:bold}.card{background:#1b222a;border:1px solid #35404c;border-radius:14px;padding:18px}
   h2{margin:0 0 8px;font-size:22px}.muted{color:#aab6c2;font-size:13px}.status{margin:14px 0;padding:12px;border-radius:9px;background:#111820;color:#ffd166;font-weight:bold}
   pre{margin:0;height:65vh;min-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#080c10;border-radius:9px;padding:14px;color:#d8e4ef;font:13px/1.55 Consolas,monospace}
   @media(max-width:600px){main{margin:0;padding:8px}.card{padding:12px}pre{height:72vh}}
   #status{display:none!important}</style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
-  <div id="status" class="status">Đang kết nối...</div><div class="log-tools"><label><input type="radio" name="logMode" value="quick" checked> Log nhanh</label><label><input type="radio" name="logMode" value="raw"> Log RAW API đầy đủ</label><button type="button" id="copyLogs">Sao chép</button><button type="button" id="clearLogs">Xóa nhật ký</button></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
+  <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
   (function(){
     // Xóa toàn bộ tham số chứa mật khẩu khỏi thanh địa chỉ sau khi server đã nhận yêu cầu.
