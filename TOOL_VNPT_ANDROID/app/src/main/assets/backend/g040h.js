@@ -1534,7 +1534,7 @@ async function loginDefaultAndChangePassword(newPassword) {
   if (r.status >= 400) throw new Error(`Đổi mật khẩu modem thất bại: HTTP ${r.status}`);
   log("Đã gửi yêu cầu đổi mật khẩu quản trị");
 
-  await sleep(1500);
+  //await sleep(1500);
   log("Đăng nhập lại bằng mật khẩu mới");
   // Không xóa toàn bộ cookies ở đây: SESSIONID được modem cấp từ GET / đầu tiên.
   // GET login.asp không cấp SESSIONID mới (theo log thực tế), nên xóa cookies
@@ -1701,7 +1701,7 @@ async function configurePppoe(user, pass, vlan) {
         const deleted = await modemRequest("POST", path, formEncode(deletePayload), pageHeaders(path));
         if (deleted.status >= 400) throw new Error(`Xóa WAN PPPoE trả HTTP ${deleted.status}`);
 
-        await sleep(1500);
+        //await sleep(1500);
         const refreshed = await getPage(path);
         entries = wanEntriesFromHtml(refreshed);
         if (entries === null) throw new Error("Không đọc được danh sách WAN sau khi gửi lệnh xóa");
@@ -1734,7 +1734,7 @@ async function configurePppoe(user, pass, vlan) {
   payload.CsrfToken = createCsrf;
   const r = await postPage(path, payload);
   if (r.status >= 400) throw new Error(`Lưu PPPoE thất bại: HTTP ${r.status}`);
-  await sleep(1500);
+  //await sleep(1500);
   const verifyHtml = await getPage(path);
   const verifyEntries = wanEntriesFromHtml(verifyHtml);
   if (verifyEntries && !verifyEntries.some(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === payload.wan_vid)) {
@@ -1793,7 +1793,7 @@ async function configureModem(cfg) {
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
   
-  await sleep(1500);
+  //await sleep(1500);
   
   if (cfg.doWifi) {
     stepLog("4/4 Wi-Fi: chờ modem ổn định");
