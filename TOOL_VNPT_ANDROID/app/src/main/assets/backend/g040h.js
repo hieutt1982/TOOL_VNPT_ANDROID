@@ -1752,35 +1752,36 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
   
   if (cfg.doWifi) {
-    stepLog("4/4 Wi-Fi: chạy song song hai cặp GET CSRF → POST cấu hình");
-    const bands = [
-      { band: "5G", name: "5 GHz", run: async () => saveWifiBand(await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword)) },
-      { band: "2.4G", name: "2.4 GHz", run: async () => saveWifiBand(await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword)) }
-    ];
-    for (const item of bands) stepLog(`4/4 Wi-Fi ${item.name}: bắt đầu cặp GET CSRF → POST`);
-    const outcomes = await Promise.allSettled(bands.map(item => item.run()));
-    for (let i = 0; i < bands.length; i++) {
-      const item = bands[i];
-      const outcome = outcomes[i];
-      if (outcome.status === "fulfilled") {
-        stepLog(`4/4 Wi-Fi ${item.name}: đã nhận phản hồi`);
-        continue;
+    stepLog("4/4 Wi-Fi: lấy CSRF 5 GHz và 2.4 GHz trước khi POST");
+    const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
+    const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+    const submit = async prepared => {
+      try {
+        await saveWifiBand(prepared);
+        stepLog(`4/4 Wi-Fi ${prepared.band === "5G" ? "5 GHz" : "2.4 GHz"}: đã nhận phản hồi`);
+      } catch (err) {
+        let failure = err;
+        if (prepared.band === "2.4G" && /\b401\b/.test(String(err.message || err))) {
+          stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
+          try {
+            await ensureSession(cfg.password);
+            const retry = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+            await saveWifiBand(retry);
+            stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
+            return;
+          } catch (retryError) { failure = retryError; }
+        }
+        const warning = `Wi-Fi ${prepared.band}: chưa nhận được xác nhận từ modem (${failure.message || failure})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
       }
-      let failure = outcome.reason;
-      if (item.band === "2.4G" && /\b401\b/.test(String(failure && failure.message || failure))) {
-        stepLog("Modem trả HTTP 401 cho Wi-Fi 2.4 GHz; đăng nhập lại, lấy CSRF mới rồi thử lại một lần.");
-        try {
-          await ensureSession(cfg.password);
-          const retry = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-          await saveWifiBand(retry);
-          stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi sau khi đăng nhập lại");
-          continue;
-        } catch (retryError) { failure = retryError; }
-      }
-      const warning = `Wi-Fi ${item.name}: chưa nhận được xác nhận từ modem (${failure && failure.message || failure})`;
-      warnings.push(warning);
-      stepLog(`⚠️ ${warning}`);
-    }
+    };
+    stepLog("4/4 Wi-Fi 5 GHz: đang POST cấu hình");
+    await submit(wifi5);
+    stepLog("4/4 Wi-Fi: chờ 1 giây trước POST 2.4 GHz");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    stepLog("4/4 Wi-Fi 2.4 GHz: đang POST cấu hình");
+    await submit(wifi2);
   } else {
     stepLog("4/4 Wi-Fi: bỏ qua");
   }
