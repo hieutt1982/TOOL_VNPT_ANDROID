@@ -134,15 +134,39 @@ async function get_csrf_token_from_page(ecnt_token, page_url) {
 }
 
 function extractCsrfToken(html) {
+  const source = String(html || "");
+  // Router firmware varies the order and quoting of input attributes.
+  for (const tag of source.match(/<input\b[^>]*>/gi) || []) {
+    const attrs = {};
+    const attrPattern = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+    let attr;
+    while ((attr = attrPattern.exec(tag))) {
+      attrs[attr[1].toLowerCase()] = attr[2] ?? attr[3] ?? attr[4] ?? "";
+    }
+    if ((attrs.name || "").toLowerCase() === "csrftoken" && attrs.value) return attrs.value;
+  }
+
   const patterns = [
-    /name="CsrfToken"\s+value="([^"]+)"/i,
-    /NAME="CsrfToken"\s+VALUE="([^"]+)"/i,
-    /csrf_token\s*=\s*"([^"]+)"/i,
-    /CsrfToken\s*=\s*'([^']+)'/i
+    /csrf_token\s*=\s*["']([^"']+)["']/i,
+    /\bCsrfToken\s*=\s*["']([^"']+)["']/i
   ];
-  for (const p of patterns) {
-    const m = String(html || "").match(p);
-    if (m) return m[1];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+function extractInputValue(html, inputName) {
+  const expected = String(inputName || "").toLowerCase();
+  for (const tag of String(html || "").match(/<input\b[^>]*>/gi) || []) {
+    const attrs = {};
+    const attrPattern = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+    let attr;
+    while ((attr = attrPattern.exec(tag))) {
+      attrs[attr[1].toLowerCase()] = attr[2] ?? attr[3] ?? attr[4] ?? "";
+    }
+    if ((attrs.name || "").toLowerCase() === expected) return attrs.value ?? "";
   }
   return null;
 }
@@ -370,8 +394,23 @@ payload["wlanMuMimoUlEnable"] = "on";
 payload["CsrfToken"] = csrf_token;
   console.log(`\n📤 Cấu hình Wi-Fi 2.4G: ${new_ssid}`);
   const stdout = await postModemForm("/cgi-bin/net-wlan.asp", payload, ecnt_token);
-  if (stdout.includes(new_ssid) && stdout.includes(new_password)) console.log("\n✅ WIFI 2.4G THÀNH CÔNG!");
-  else { console.log("\n❌ WIFI 2.4G THẤT BẠI!"); throw new Error("Modem không xác nhận cấu hình Wi-Fi 2.4G"); }
+  // Firmware often leaves the password input blank in its HTML response, so
+  // checking for the submitted password creates a false failure. Read back
+  // the SSID from the modem's current 2.4 GHz settings instead.
+  await sleep(1200);
+  const verifyUrl = `https://${MODEM_IP}/cgi-bin/net-wlan.asp`;
+  const verifyHtml = await runRequest("GET", verifyUrl, {
+    "Cookie": `ecntToken=${ecnt_token}`,
+    "Referer": verifyUrl,
+    "Origin": `https://${MODEM_IP}`,
+    "User-Agent": "Mozilla/5.0"
+  });
+  const savedSsid = extractInputValue(verifyHtml, "wlSsid");
+  if (savedSsid === new_ssid) console.log("\n✅ WIFI 2.4G THÀNH CÔNG! (đã đọc lại SSID từ modem)");
+  else {
+    console.log("\n❌ WIFI 2.4G THẤT BẠI! SSID chưa được xác nhận khi đọc lại modem.");
+    throw new Error("Modem chưa xác nhận đã lưu SSID Wi-Fi 2.4 GHz");
+  }
   return stdout;
 }
 
