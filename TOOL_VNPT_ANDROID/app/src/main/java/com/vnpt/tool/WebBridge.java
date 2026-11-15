@@ -1,6 +1,7 @@
 package com.vnpt.tool;
 
 import android.webkit.WebView;
+import android.webkit.JavascriptInterface;
 import android.os.Handler;
 import android.os.Looper;
 import java.io.IOException;
