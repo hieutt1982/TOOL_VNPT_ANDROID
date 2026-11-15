@@ -104,13 +104,20 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
       responseChunks = [];
       res.on("data", chunk => responseChunks.push(chunk));
       res.on("end", () => {
-        parseCookieHeaders(res.headers);
-        const text = Buffer.concat(responseChunks).toString("utf8");
-        rememberJavascriptAuth(text);
-        const setCookieNames = (res.headers["set-cookie"] || []).map(v => v.split("=")[0].trim()).join(",") || "(không có)";
-        log(`[HTTP<] ${method} ${path} => ${res.statusCode || 0}; location=${res.headers.location || "(không có)"}; Set-Cookie=${setCookieNames}; body=${text.length} ký tự`);
-        if (res.statusCode >= 400) log(`[HTTP<] Body đầu: ${text.slice(0, 220).replace(/[\r\n\t]+/g, " ")}`);
-        finishResolve({ status: res.statusCode || 0, headers: res.headers, text });
+        try {
+          parseCookieHeaders(res.headers);
+          const text = Buffer.concat(responseChunks).toString("utf8");
+          rememberJavascriptAuth(text);
+          const setCookie = res.headers["set-cookie"] || [];
+          const setCookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
+          const setCookieNames = setCookieList.map(v => String(v).split("=")[0].trim()).join(",") || "(không có)";
+          log(`[HTTP<] ${method} ${path} => ${res.statusCode || 0}; location=${res.headers.location || "(không có)"}; Set-Cookie=${setCookieNames}; body=${text.length} ký tự`);
+          if (res.statusCode >= 400) log(`[HTTP<] Body đầu: ${text.slice(0, 220).replace(/[\r\n\t]+/g, " ")}`);
+          finishResolve({ status: res.statusCode || 0, headers: res.headers, text });
+        } catch (error) {
+          log(`[HTTP!] Lỗi xử lý phản hồi ${method} ${path}: ${error && error.stack || error}`);
+          finishReject(error);
+        }
       });
       res.on("aborted", () => {
         const text = Buffer.concat(responseChunks).toString("utf8");
@@ -1486,9 +1493,10 @@ async function loginDefaultAndChangePassword(newPassword) {
   const loginPage = await modemRequest("GET", "/cgi-bin/login.asp", "", {
     "Referer": `https://${activeIp}/`
   });
+  log(`Đã nhận trang login.asp (HTTP ${loginPage.status}; ${String(loginPage.text || "").length} ký tự)`);
   if (loginPage.status >= 400) throw new Error(`Mở login.asp thất bại: HTTP ${loginPage.status}`);
   setLoginBase64Cookie("admin", "admin");
-  log("Đã tạo cookie base64 sau khi tải login.asp (đúng thứ tự JavaScript submitform)");
+  log("Đã tạo cookie base64 sau khi tải login.asp; chuẩn bị POST đăng nhập mặc định");
   let r = await postPage("/cgi-bin/login.asp", {
     StatusActionFlag: "",
     Auth_LoginID: "admin",
