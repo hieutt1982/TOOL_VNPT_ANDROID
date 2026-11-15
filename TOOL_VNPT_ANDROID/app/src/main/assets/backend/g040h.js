@@ -18,7 +18,6 @@ let activeIp = "";
 let cookies = {};
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 1 });
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function log(message) {
   console.log(String(message));
 }
@@ -1534,7 +1533,6 @@ async function loginDefaultAndChangePassword(newPassword) {
   if (r.status >= 400) throw new Error(`Đổi mật khẩu modem thất bại: HTTP ${r.status}`);
   log("Đã gửi yêu cầu đổi mật khẩu quản trị");
 
-  //await sleep(1500);
   log("Đăng nhập lại bằng mật khẩu mới");
   // Không xóa toàn bộ cookies ở đây: SESSIONID được modem cấp từ GET / đầu tiên.
   // GET login.asp không cấp SESSIONID mới (theo log thực tế), nên xóa cookies
@@ -1658,73 +1656,16 @@ async function configureSlid(slid) {
 }
 
 async function configurePppoe(user, pass, vlan) {
-  log("3/5 — Kiểm tra PPPoE cũ, xóa nếu có rồi tạo mới");
+  log("3/5 — Tạo PPPoE mới");
   const path = "/cgi-bin/home_wan.asp";
-  try {
-  const html = await getPage(path);
-  const csrf = csrfFrom(html);
-  if (!csrf) throw new Error("Không lấy được CsrfToken của trang WAN/PPPoE");
-
-  let entries = wanEntriesFromHtml(html);
-  if (entries === null) {
-    log("⚠️ Không đọc được danh sách WAN từ home_wan.asp; bỏ qua xóa tự động và thử tạo PPPoE.");
-  } else {
-    let deleteAttempts = 0;
-    while (deleteAttempts < 8) {
-      const target = entries.find(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === String(vlan || "11"));
-      if (!target) {
-        log(deleteAttempts ? "Đã xóa PPPoE cũ theo VLAN yêu cầu." : `Không có PPPoE cũ trên VLAN ${vlan || "11"}; sẽ tạo mới.`);
-        break;
-      }
-      deleteAttempts++;
-      try {
-        log(`Đang chọn WAN PPPoE cũ (VLAN ${target.vlan}, mục ${target.index}) để xóa.`);
-        const selectPayload = { ...WAN_TEMPLATE };
-        Object.assign(selectPayload, {
-          submit_disable: "Yes", wanIsCreated: "No", wanVCFlag: "1", wanSaveFlag: "0",
-          newVLANFlag: "0", IPv6PD_Flag: "Yes", WAN_DefaultRoute0: "Yes", WAN_DefaultRoute1: "Yes",
-          wan_TCPMTU0: "1492", wan_TCPMTU1: "1492", wan_FIREWALL: "Disabled", wan_TCPBridge: "1492",
-          DynIPv6Enable_flag: "N/A", DSLITEAddr0: "N/A", wan_VC: String(target.index),
-          wan_PPPUsername: inputValue(html, "wan_PPPUsername") || "",
-          wan_PPPPassword: inputValue(html, "wan_PPPPassword") || "",
-          delWanFlag: "0", CsrfToken: csrf
-        });
-        delete selectPayload.IPv6PD_Flag_Default;
-        const selected = await modemRequest("POST", path, formEncode(selectPayload), pageHeaders(path));
-        if (selected.status >= 400) throw new Error(`Chọn WAN để xóa trả HTTP ${selected.status}`);
-        const deleteCsrf = csrfFrom(selected.text);
-        if (!deleteCsrf) throw new Error("Không lấy được CsrfToken mới sau khi chọn WAN PPPoE");
-
-        const deletePayload = { ...selectPayload, wanVCFlag: "2", delWanFlag: "1", CsrfToken: deleteCsrf };
-        deletePayload.wan_PPPUsername = inputValue(selected.text, "wan_PPPUsername") || selectPayload.wan_PPPUsername;
-        deletePayload.wan_PPPPassword = inputValue(selected.text, "wan_PPPPassword") || selectPayload.wan_PPPPassword;
-        const deleted = await modemRequest("POST", path, formEncode(deletePayload), pageHeaders(path));
-        if (deleted.status >= 400) throw new Error(`Xóa WAN PPPoE trả HTTP ${deleted.status}`);
-
-        //await sleep(1500);
-        const refreshed = await getPage(path);
-        entries = wanEntriesFromHtml(refreshed);
-        if (entries === null) throw new Error("Không đọc được danh sách WAN sau khi gửi lệnh xóa");
-        if (entries.some(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === String(vlan || "11"))) {
-          throw new Error(`PPPoE VLAN ${vlan || "11"} vẫn còn sau lệnh xóa`);
-        }
-        log(`Đã xóa PPPoE cũ VLAN ${vlan || "11"}.`);
-      } catch (err) {
-        log(`⚠️ Không xóa được PPPoE cũ: ${err.message || err}`);
-        log("Bỏ qua xóa và tiếp tục thử tạo PPPoE mới.");
-        break;
-      }
-    }
-    if (deleteAttempts >= 8 && entries.some(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === String(vlan || "11"))) {
-      log("⚠️ Đã đạt giới hạn 8 lần xóa PPPoE cũ; vẫn tiếp tục thử tạo mới.");
-    }
-  }
-  } catch (err) {
-    log(`⚠️ Không thể kiểm tra/xóa PPPoE cũ: ${err.message || err}`);
-    log("Bỏ qua bước xóa và tiếp tục thử tạo PPPoE mới.");
-  }
-
   const createHtml = await getPage(path);
+  const existingEntries = wanEntriesFromHtml(createHtml);
+  if (existingEntries === null) throw new Error("Không đọc được danh sách WAN; bỏ qua tạo PPPoE để tránh tạo trùng.");
+  const existing = existingEntries.find(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === String(vlan || "11"));
+  if (existing) {
+    log(`PPPoE VLAN ${vlan || "11"} đã tồn tại; giữ nguyên, bỏ qua tạo mới.`);
+    return false;
+  }
   const createCsrf = csrfFrom(createHtml);
   if (!createCsrf) throw new Error("Không lấy được CsrfToken trước khi tạo PPPoE");
   const payload = { ...WAN_TEMPLATE };
@@ -1734,7 +1675,6 @@ async function configurePppoe(user, pass, vlan) {
   payload.CsrfToken = createCsrf;
   const r = await postPage(path, payload);
   if (r.status >= 400) throw new Error(`Lưu PPPoE thất bại: HTTP ${r.status}`);
-  //await sleep(1500);
   const verifyHtml = await getPage(path);
   const verifyEntries = wanEntriesFromHtml(verifyHtml);
   if (verifyEntries && !verifyEntries.some(item => item.created === "Yes" && item.isp === "2" && String(item.vlan) === payload.wan_vid)) {
@@ -1742,6 +1682,7 @@ async function configurePppoe(user, pass, vlan) {
   }
   if (verifyEntries) log(`Đã tạo và xác nhận PPPoE VLAN ${payload.wan_vid}.`);
   else log(`Đã gửi lệnh tạo PPPoE VLAN ${payload.wan_vid} (HTTP ${r.status}); không đọc được danh sách để xác minh.`);
+  return true;
 }
 
 async function configureWifiBand(band, path, template, ssid, password) {
@@ -1783,8 +1724,8 @@ async function configureModem(cfg) {
   if (cfg.doPppoe) {
     try {
       stepLog("3/4 PPPoE: đang xử lý");
-      await configurePppoe(cfg.pppoeUser, cfg.pppoePassword, cfg.vlan);
-      stepLog("3/4 PPPoE: xong");
+      const created = await configurePppoe(cfg.pppoeUser, cfg.pppoePassword, cfg.vlan);
+      stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${cfg.vlan || "11"} đã có, giữ nguyên`);
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
       warnings.push(warning);
@@ -1792,8 +1733,6 @@ async function configureModem(cfg) {
       stepLog("Bỏ qua lỗi PPPoE và tiếp tục các bước còn lại.");
     }
   } else stepLog("3/4 PPPoE: bỏ qua");
-  
-  //await sleep(1500);
   
   if (cfg.doWifi) {
     stepLog("4/4 Wi-Fi: chờ modem ổn định");
