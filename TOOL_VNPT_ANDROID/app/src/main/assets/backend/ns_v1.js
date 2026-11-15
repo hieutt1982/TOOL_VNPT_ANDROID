@@ -85,6 +85,7 @@ async function login_and_get_etoken(username, password) {
     `CsrfToken=&username=${quote(username)}` +
     `&password=${encoded_password}&Language_Flag=0`;
 
+  stepLog("1/4 Login: POST check_auth.json để xác thực và lấy token");
   console.log("📤 Gửi yêu cầu đăng nhập modem");
 
   const stdout = await runRequest("POST",
@@ -489,6 +490,7 @@ async function wan_new_pppoe(ecnt_token,user_ppp,pass_ppp,vlan_id='11') {
   const p=buildWanPayload(current.csrf,vlan_id);
   p.curSetIndex='0'; p.WanCurrIFIdx=String(next); p.wanId='-1'; p.Wan_Flag='1'; p.afterdeleteFlag='0'; p.OperatorStyle='Add';
   p.pppUserName=user_ppp; p.pppPassword=pass_ppp;
+  stepLog("3/4 PPPoE: POST tạo kết nối mới");
   console.log(`\n📤 TẠO PPPoE | VLAN ${vlan_id} | IFIdx=${next}`);
   const out=await postModemForm('/cgi-bin/net-wanset.asp',p,ecnt_token,{'User-Agent':'Mozilla/5.0','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'vi,en-US;q=0.9,en;q=0.8'});
   console.log(`📥 Modem đã phản hồi lệnh tạo PPPoE VLAN ${vlan_id}; không tải lại danh sách WAN.`);
@@ -761,11 +763,12 @@ async function configureModem(cfg) {
   }
 
   stepLog("Bắt đầu cấu hình modem");
-  stepLog("1/4 Đăng nhập modem: đang xử lý");
+  stepLog("1/4 Login: đang xử lý");
   let token;
   if (mode === "1") {
     token = await login_and_get_etoken(USERNAME, "admin");
     if (!token) throw new Error("LOGIN admin/admin FAIL");
+    stepLog("1/4 Login: POST đổi mật khẩu mặc định, sau đó đăng nhập lại");
     const changed = await change_first_pass(token, PASSWORD_NEW, PASSWORD_NEW);
     if (changed === null) throw new Error("ĐỔI PASSWORD FAIL");
     token = await login_and_get_etoken(USERNAME, PASSWORD_NEW);
@@ -779,13 +782,13 @@ async function configureModem(cfg) {
   stepLog("1/4 Đăng nhập modem: xong");
 
   if (cfg.doSlid) {
-    stepLog("2/4 SLID: đang cấu hình");
+    stepLog("2/4 SLID: GET CSRF rồi POST cấu hình");
     await set_slid(token, slid_gpon);
     stepLog("2/4 SLID: xong");
   } else stepLog("2/4 SLID: bỏ qua");
 
   if (cfg.doPppoe) {
-    stepLog("3/4 PPPoE: đang xử lý");
+    stepLog("3/4 PPPoE: GET danh sách WAN/CSRF rồi POST tạo mới");
     try {
       const created = await wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id);
       stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${vlan_id} đã có, giữ nguyên`);
@@ -898,12 +901,10 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">4.</span>WIFI</div><div class="grid"><label class="step-toggle"><input id="doWifi2g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable 2.4 GHz':'Disable 2.4 GHz'"><span>Disable 2.4 GHz</span></label><label class="step-toggle"><input id="doWifi5g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable 5 GHz':'Disable 5 GHz'"><span>Disable 5 GHz</span></label></div></div>
+  <div class="section-title"><span class="step">4.</span>WIFI</div>
   <div class="grid">
-    <div><label>WiFi 2.4 GHz</label><input id="wifi2gName" value="WiFi 2.4G"></div>
-    <div><label>Mật khẩu WiFi 2.4 GHz</label><input id="wifi2gPassword" value="1234567890"></div>
-    <div><label>WiFi 5 GHz</label><input id="wifi5gName" value="WiFi 5G"></div>
-    <div><label>Mật khẩu WiFi 5 GHz</label><input id="wifi5gPassword" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div><label class="step-toggle"><input id="doWifi2g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2gName" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="wifi2gPassword" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div><label class="step-toggle"><input id="doWifi5g" type="checkbox" onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Disable</span></label></div><label>Tên WiFi 5 GHz</label><input id="wifi5gName" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="wifi5gPassword" value="1234567890"></div>
   </div>
 </div>
 
