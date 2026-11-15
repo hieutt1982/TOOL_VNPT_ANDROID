@@ -36,7 +36,6 @@ function stepLog(...a){
   const line=`[${stamp}] ${s}`;
   console.log(line); logs.push(line); if(logs.length>MAX_LOGS) logs.shift();
 }
-function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 function storeCookies(headers){
   const sc=headers["set-cookie"]||[];
   for(const c of sc){
@@ -135,19 +134,6 @@ async function setSlid(ip,slid){
   if(!Object.prototype.hasOwnProperty.call(result,"sysInfoGponPassWd")) throw new Error(`SLID FAIL: modem không xác nhận cập nhật (status=${result.status||"không rõ"})`);
   log("SLID OK");
 }
-async function deletePppoe(ip){
-  log("[PPPoE] ĐANG XÓA PPPoE CŨ...");
-  try{
-    const result=await api(ip,"dowan.cmd",{action:"remove",data:"veip0.11"});
-    if(result.status==="OK"){log("XÓA PPPoE CŨ OK");return true;}
-    log("KHÔNG CÓ PPPoE CŨ HOẶC KHÔNG CẦN XÓA -> BỎ QUA");
-    return false;
-  }catch(e){
-    log("XÓA PPPoE CŨ KHÔNG THỰC HIỆN ĐƯỢC:",e.message||e);
-    log("-> BỎ QUA XÓA, TIẾP TỤC TẠO PPPoE MỚI");
-    return false;
-  }
-}
 async function setPppoe(ip,user,pass){
   if(!user||!pass) throw new Error("Chưa nhập đủ PPPoE.");
   log("[PPPoE] ĐANG TẠO PPPoE MỚI...");
@@ -195,13 +181,8 @@ async function configure(o){
     if(doSlid){stepLog("2/4 SLID: đang cấu hình");await setSlid(o.ip,o.slid);stepLog("2/4 SLID: xong");} else stepLog("2/4 SLID: bỏ qua");
     if(doPppoe){
       stepLog("3/4 PPPoE: đang xử lý");
-      const pppoeRemoved=await deletePppoe(o.ip);
-      if(pppoeRemoved){
-        await sleep(1500);
-      }
       try{
         await setPppoe(o.ip,o.pppoeUser,o.pppoePass);
-        await sleep(1500);
         stepLog("3/4 PPPoE: xong");
       }catch(e){
         const warning=`PPPoE không hoàn tất: ${e.message||e}`; warnings.push(warning);
@@ -209,7 +190,7 @@ async function configure(o){
       }
     } else stepLog("3/4 PPPoE: bỏ qua");
     
-    await sleep(1500);
+    
     
     if(doWifi){
       stepLog("4/4 Wi-Fi 5 GHz: đang cấu hình");
