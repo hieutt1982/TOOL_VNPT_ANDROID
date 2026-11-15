@@ -69,7 +69,11 @@ public final class ApiClient {
         };
         SSLContext ssl = SSLContext.getInstance("TLS");
         ssl.init(null, new TrustManager[]{tm}, new SecureRandom());
-        modem = new OkHttpClient.Builder().cookieJar(COOKIE_JAR)
+        // Modem scripts manage their own Cookie header (G040H needs to send
+        // SESSIONID and its JavaScript-generated base64 cookie together).
+        // OkHttp's BridgeInterceptor otherwise replaces an explicit Cookie
+        // header with cookies from CookieJar and drops the base64 value.
+        modem = new OkHttpClient.Builder()
             .sslSocketFactory(ssl.getSocketFactory(), tm)
             .hostnameVerifier((host, session) -> isPrivateModemHost(host))
             .connectTimeout(15, TimeUnit.SECONDS).readTimeout(35, TimeUnit.SECONDS)
