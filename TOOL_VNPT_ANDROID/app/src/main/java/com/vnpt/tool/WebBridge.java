@@ -127,15 +127,13 @@ public final class WebBridge {
                     upstreamRequest = new Request.Builder()
                             .url(UPSTREAM + "/quantri/user/xacthuc_tapdoan_v2")
                             .header("Accept", "application/json")
-                            .header("User-Agent", "Dart/3.10 (dart:io)")
-                            .header("Connection", "close");
+                            .header("User-Agent", "Dart/3.10 (dart:io)");
                     addPostBody(upstreamRequest, body, headers);
                 } else if ("/api/auth/step2".equals(route) && "POST".equals(httpMethod)) {
                     upstreamRequest = new Request.Builder()
                             .url(UPSTREAM + "/quantri/oauth/token")
                             .header("Accept", "application/json")
-                            .header("User-Agent", "Dart/3.10 (dart:io)")
-                            .header("Connection", "close");
+                            .header("User-Agent", "Dart/3.10 (dart:io)");
                     addPostBody(upstreamRequest, body, headers);
                 } else if (route.startsWith("/api/modem/") && "GET".equals(httpMethod)) {
                     String targetPath = "/esbx/onelink" + route.substring("/api/modem".length());
