@@ -114,6 +114,7 @@ public final class WebBridge {
                                String headersJson, String body) {
         executor.execute(() -> {
             JSONObject result = new JSONObject();
+            String route = "(unknown)"; // Keep available to the catch block for diagnostics.
             try {
                 String httpMethod = method == null ? "GET" : method.toUpperCase(Locale.US);
                 String safePath = (path == null || path.isEmpty()) ? "/" : path;
@@ -121,7 +122,7 @@ public final class WebBridge {
                         (safePath.startsWith("/") ? safePath : "/" + safePath));
                 if (incoming == null) throw new IOException("Đường dẫn API không hợp lệ");
 
-                String route = incoming.encodedPath();
+                route = incoming.encodedPath();
                 JSONObject headers = new JSONObject(headersJson == null ? "{}" : headersJson);
                 diag("ONELINK>", httpMethod + " " + route + " headers=" + safeHeaders(headers) + " body=" + safeBody(body));
                 long startedAt = System.currentTimeMillis();
