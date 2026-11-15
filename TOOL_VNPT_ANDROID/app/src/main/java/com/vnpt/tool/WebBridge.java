@@ -71,6 +71,7 @@ public final class WebBridge {
                 }
 
                 JSONObject headers = new JSONObject(headersJson == null ? "{}" : headersJson);
+                String httpMethod = method == null ? "GET" : method.toUpperCase(Locale.US);
                 diag("HTTP>", httpMethod + " " + parsedUrl + " modem=" + modem + " headers=" + safeHeaders(headers) + " body=" + safeBody(body));
                 long startedAt = System.currentTimeMillis();
                 Request.Builder requestBuilder = new Request.Builder().url(parsedUrl);
@@ -80,7 +81,6 @@ public final class WebBridge {
                     requestBuilder.header(name, headers.optString(name, ""));
                 }
 
-                String httpMethod = method == null ? "GET" : method.toUpperCase(Locale.US);
                 if ("GET".equals(httpMethod) || "HEAD".equals(httpMethod)) {
                     requestBuilder.method(httpMethod, null);
                 } else {
