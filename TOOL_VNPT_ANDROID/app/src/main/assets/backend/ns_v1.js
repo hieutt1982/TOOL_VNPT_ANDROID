@@ -909,35 +909,41 @@ const HTML = `<!doctype html>
  .log-actions button{min-width:42px;padding:3px 6px!important;border-radius:6px;font-size:10px!important;line-height:1}
  .log{height:260px;min-height:32vh;padding:10px;border-radius:8px;font-size:10px;line-height:1.3}
 }
-.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}.sync-fetch{width:auto!important;min-width:180px;height:48px;margin:0!important;padding:8px 18px!important;border:0;border-radius:11px!important;background:#0877e8!important;color:#fff!important;font-size:18px!important;font-weight:800}.sync-card .sync-note{margin-top:9px;font-size:16px}.sync-card{border-color:#0877e8}.wifi-grid{grid-template-columns:minmax(0,1fr)!important}.log{height:320px!important;min-height:38vh!important;font-size:16px!important;line-height:1.5!important}@media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important;font-size:16px!important;line-height:1.5!important}}
 
-
-
-/* Separate subscriber lookup, stacked Wi-Fi bands, and taller logs */
-.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
-.sync-fetch{width:auto!important;min-width:180px;height:46px;margin:0!important;padding:8px 18px!important;border:0;border-radius:11px!important;background:#0877e8!important;color:#fff!important;font-size:16px!important;font-weight:800}
-.sync-card .sync-note{margin-top:9px;font-size:14px;line-height:1.35}
+/* Final compact Android form layout */
 .sync-card{border-color:#0877e8}
-.wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
-.log{height:320px!important;min-height:38vh!important}
-@media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important}}
-
-/* One-step larger Android form sizing; keep lookup button compact */
-@media(max-width:620px){
- body{font-size:18px}
- .card-head h2{font-size:21px;line-height:1.2}
- .field label{font-size:17px;line-height:1.2}
- input,select{height:auto;min-height:50px;padding:8px 10px;font-size:19px;line-height:1.2}
- .sync-fetch{min-width:150px;min-height:46px;padding:8px 12px!important;font-size:15px!important;line-height:1.2}
- .sync-card .sync-note{font-size:15px;line-height:1.35}
- .step-option{min-height:66px;font-size:13px;gap:6px}
- .step-option input{width:29px;height:29px}
- .step-option span{font-size:13px!important}
- .run{min-height:60px;height:auto;font-size:21px!important;padding:11px}
- .status{font-size:17px;line-height:1.3}
- .log-mode{font-size:17px}
- .log-actions button{min-height:48px;font-size:17px}
- .log{font-size:15px;line-height:1.4}
+.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px;align-items:end}
+.sync-fetch{width:100%!important;height:auto!important;min-height:46px!important;margin:0!important;padding:9px 10px!important;border:0!important;border-radius:10px!important;background:#0877e8!important;color:#fff!important;font-size:15px!important;font-weight:700;line-height:1.2!important;white-space:normal}
+.sync-card .sync-note{margin-top:8px;font-size:13px;line-height:1.35;color:#637a96}
+.card-head{min-height:48px;padding:8px 12px}
+.card-head h2{flex:1;min-width:0;font-size:clamp(18px,5vw,23px)!important;line-height:1.15!important;white-space:normal;overflow-wrap:anywhere}
+.card-head .head-icon{flex:none}
+.card-body{padding:12px}
+.field label{font-size:15px!important;line-height:1.2!important;margin-bottom:5px}
+input,select{width:100%;height:auto!important;min-height:46px!important;padding:8px 10px!important;font-size:17px!important;line-height:1.2!important}
+.field-wrap input{padding-right:44px!important}
+.wifi-grid{display:grid;grid-template-columns:minmax(0,1fr)!important;gap:8px!important}
+.wifi-card .card-head h2{font-size:19px!important}
+.toggle-row{grid-template-columns:repeat(4,minmax(0,1fr));min-height:68px;padding:5px;margin:8px 0}
+.step-option{min-height:58px;gap:5px;padding:3px;font-size:13px!important;line-height:1.1!important}
+.step-option input{width:22px!important;height:22px!important;flex:none}
+.step-option span{min-width:0!important;font-size:13px!important;text-align:center;line-height:1.1!important}
+.run{width:100%;height:auto!important;min-height:54px!important;padding:10px!important;font-size:19px!important;line-height:1.2!important;white-space:normal}
+.status{min-height:42px;padding:9px 11px;font-size:15px!important;line-height:1.3!important}
+.log-tools{min-height:46px;gap:7px}
+.log-mode{font-size:15px!important;gap:6px}
+.log-actions button{min-height:40px;padding:7px 10px!important;font-size:15px!important}
+.log{height:280px!important;min-height:34vh!important;padding:11px;font-size:13px!important;line-height:1.4!important}
+@media(max-width:380px){
+ .sync-lookup{grid-template-columns:minmax(0,1fr) 124px;gap:7px}
+ .sync-fetch{font-size:14px!important;padding:8px 5px!important}
+ .card-head h2{font-size:18px!important}
+ .field label{font-size:14px!important}
+ input,select{font-size:16px!important;min-height:44px!important}
+ .step-option{flex-direction:column!important;min-height:62px;gap:3px}
+ .step-option span{font-size:11px!important}
+ .step-option input{width:20px!important;height:20px!important}
+ .run{font-size:18px!important}
 }
 </style>
 </head>
@@ -1049,30 +1055,41 @@ function configurePage(title, apiPrefix) {
 
 
 /* Separate subscriber lookup, stacked Wi-Fi bands, and taller logs */
-.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
-.sync-fetch{width:auto!important;min-width:180px;height:46px;margin:0!important;padding:8px 18px!important;border:0;border-radius:11px!important;background:#0877e8!important;color:#fff!important;font-size:16px!important;font-weight:800}
-.sync-card .sync-note{margin-top:9px;font-size:14px;line-height:1.35}
-.sync-card{border-color:#0877e8}
-.wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
-.log{height:320px!important;min-height:38vh!important}
-@media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important}}
 
-/* One-step larger Android form sizing; keep lookup button compact */
-@media(max-width:620px){
- body{font-size:18px}
- .card-head h2{font-size:21px;line-height:1.2}
- .field label{font-size:17px;line-height:1.2}
- input,select{height:auto;min-height:50px;padding:8px 10px;font-size:19px;line-height:1.2}
- .sync-fetch{min-width:150px;min-height:46px;padding:8px 12px!important;font-size:15px!important;line-height:1.2}
- .sync-card .sync-note{font-size:15px;line-height:1.35}
- .step-option{min-height:66px;font-size:13px;gap:6px}
- .step-option input{width:29px;height:29px}
- .step-option span{font-size:13px!important}
- .run{min-height:60px;height:auto;font-size:21px!important;padding:11px}
- .status{font-size:17px;line-height:1.3}
- .log-mode{font-size:17px}
- .log-actions button{min-height:48px;font-size:17px}
- .log{font-size:15px;line-height:1.4}
+/* Final compact Android form layout */
+.sync-card{border-color:#0877e8}
+.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:10px;align-items:end}
+.sync-fetch{width:100%!important;height:auto!important;min-height:46px!important;margin:0!important;padding:9px 10px!important;border:0!important;border-radius:10px!important;background:#0877e8!important;color:#fff!important;font-size:15px!important;font-weight:700;line-height:1.2!important;white-space:normal}
+.sync-card .sync-note{margin-top:8px;font-size:13px;line-height:1.35;color:#637a96}
+.card-head{min-height:48px;padding:8px 12px}
+.card-head h2{flex:1;min-width:0;font-size:clamp(18px,5vw,23px)!important;line-height:1.15!important;white-space:normal;overflow-wrap:anywhere}
+.card-head .head-icon{flex:none}
+.card-body{padding:12px}
+.field label{font-size:15px!important;line-height:1.2!important;margin-bottom:5px}
+input,select{width:100%;height:auto!important;min-height:46px!important;padding:8px 10px!important;font-size:17px!important;line-height:1.2!important}
+.field-wrap input{padding-right:44px!important}
+.wifi-grid{display:grid;grid-template-columns:minmax(0,1fr)!important;gap:8px!important}
+.wifi-card .card-head h2{font-size:19px!important}
+.toggle-row{grid-template-columns:repeat(4,minmax(0,1fr));min-height:68px;padding:5px;margin:8px 0}
+.step-option{min-height:58px;gap:5px;padding:3px;font-size:13px!important;line-height:1.1!important}
+.step-option input{width:22px!important;height:22px!important;flex:none}
+.step-option span{min-width:0!important;font-size:13px!important;text-align:center;line-height:1.1!important}
+.run{width:100%;height:auto!important;min-height:54px!important;padding:10px!important;font-size:19px!important;line-height:1.2!important;white-space:normal}
+.status{min-height:42px;padding:9px 11px;font-size:15px!important;line-height:1.3!important}
+.log-tools{min-height:46px;gap:7px}
+.log-mode{font-size:15px!important;gap:6px}
+.log-actions button{min-height:40px;padding:7px 10px!important;font-size:15px!important}
+.log{height:280px!important;min-height:34vh!important;padding:11px;font-size:13px!important;line-height:1.4!important}
+@media(max-width:380px){
+ .sync-lookup{grid-template-columns:minmax(0,1fr) 124px;gap:7px}
+ .sync-fetch{font-size:14px!important;padding:8px 5px!important}
+ .card-head h2{font-size:18px!important}
+ .field label{font-size:14px!important}
+ input,select{font-size:16px!important;min-height:44px!important}
+ .step-option{flex-direction:column!important;min-height:62px;gap:3px}
+ .step-option span{font-size:11px!important}
+ .step-option input{width:20px!important;height:20px!important}
+ .run{font-size:18px!important}
 }
 </style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
   <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
