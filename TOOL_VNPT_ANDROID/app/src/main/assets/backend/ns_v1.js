@@ -952,6 +952,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
 .sync-card .card-head h2{font-size:clamp(18px,4.5vw,22px)!important;white-space:normal;line-height:1.15!important}
 .pppoe-card .grid .field label{white-space:nowrap;font-size:14px!important;gap:5px}
 @media(max-width:380px){.sync-lookup{grid-template-columns:minmax(0,1fr) 120px;gap:7px}.sync-fetch{font-size:12px!important}.pppoe-card .grid .field label{font-size:12px!important}}
+
+/* Keep log radio controls circular despite shared input sizing */
+.log-modes{display:flex;align-items:center;gap:12px}
+.log-mode{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap}
+.log-mode input[type="radio"]{appearance:none!important;-webkit-appearance:none!important;display:inline-block!important;box-sizing:border-box!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;padding:0!important;margin:0!important;border:2px solid #9db5d2!important;border-radius:50%!important;background:#fff!important;flex:0 0 24px!important;box-shadow:none!important}
+.log-mode input[type="radio"]:checked{border:6px solid #075ff0!important;background:#fff!important}
 </style>
 </head>
 <body>
@@ -1105,6 +1111,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
 .sync-card .card-head h2{font-size:clamp(18px,4.5vw,22px)!important;white-space:normal;line-height:1.15!important}
 .pppoe-card .grid .field label{white-space:nowrap;font-size:14px!important;gap:5px}
 @media(max-width:380px){.sync-lookup{grid-template-columns:minmax(0,1fr) 120px;gap:7px}.sync-fetch{font-size:12px!important}.pppoe-card .grid .field label{font-size:12px!important}}
+
+/* Keep log radio controls circular despite shared input sizing */
+.log-modes{display:flex;align-items:center;gap:12px}
+.log-mode{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap}
+.log-mode input[type="radio"]{appearance:none!important;-webkit-appearance:none!important;display:inline-block!important;box-sizing:border-box!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;padding:0!important;margin:0!important;border:2px solid #9db5d2!important;border-radius:50%!important;background:#fff!important;flex:0 0 24px!important;box-shadow:none!important}
+.log-mode input[type="radio"]:checked{border:6px solid #075ff0!important;background:#fff!important}
 </style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
   <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
