@@ -103,14 +103,15 @@
 /* The dedicated hidden OneLink fetch page returns data to the active form. */
 window.syncSubscriberData = function(button) {
   const byId=ids=>{for(const id of ids){const el=document.getElementById(id);if(el)return el;}return null;};
-  const lookupField=byId(['slid']);
+  const lookupField=byId(['subscriberAcc']);
   const status=byId(['syncStatus','status']);
   const say=text=>{if(status)status.textContent=text;};
   const lookup=lookupField?lookupField.value.trim():'';
-  if(!lookup){say('Nhập ACC thuê bao vào ô SLID rồi bấm ĐỒNG BỘ.');return;}
+  if(!lookup){say('Nhập ACC thuê bao rồi bấm LẤY THÔNG TIN.');return;}
   if(window.__subscriberSyncFrame){say('Đang lấy dữ liệu thuê bao...');return;}
   if(button){window.__subscriberSyncButtonText=button.innerHTML;button.disabled=true;button.innerHTML='⟳ &nbsp;ĐANG LẤY...';}
   say('Đang lấy dữ liệu thuê bao qua OneLink...');
+  if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Bắt đầu đồng bộ thông tin thuê bao.',raw:'Bắt đầu đồng bộ thông tin thuê bao qua OneLink.'})}).catch(()=>{});
   const frame=document.createElement('iframe');
   frame.title='Đồng bộ dữ liệu thuê bao';
   frame.setAttribute('aria-hidden','true');
@@ -127,6 +128,10 @@ window.syncSubscriberData = function(button) {
   const onMessage=async function(event){
     if(event.source!==frame.contentWindow||!event.data)return;
     const message=event.data;
+    if(message.type==='doki-sync-log'){
+      try{if(window.__nodeDispatch)await window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:message.quick||'',raw:message.raw||''})});}catch(e){}
+      return;
+    }
     if(message.type==='doki-http-request'){
       try{
         if(typeof window.nativeHttps!=='function')throw new Error('Không tìm thấy cầu nối HTTPS Android.');
@@ -148,7 +153,8 @@ window.syncSubscriberData = function(button) {
       assign(['wifi5gName','wifi5g'],fields.wifi5gName);
       assign(['wifi5gPassword','pass5g'],fields.wifi5gPassword);
       finish(message.summary||'Đã nhận dữ liệu thuê bao và điền vào form.');
-    }else finish(message.error||'Không lấy được dữ liệu thuê bao.');
+      if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Đồng bộ thành công: '+(message.summary||'đã điền dữ liệu vào form.'),raw:'Kết quả đồng bộ: '+JSON.stringify(fields)})}).catch(()=>{});
+    }else {finish(message.error||'Không lấy được dữ liệu thuê bao.');if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Đồng bộ lỗi: '+(message.error||'Không lấy được dữ liệu thuê bao.'),raw:'Lỗi đồng bộ: '+(message.error||'Không lấy được dữ liệu thuê bao.')})}).catch(()=>{});}
   };
   if(window.__subscriberSyncMessageHandler)window.removeEventListener('message',window.__subscriberSyncMessageHandler);
   window.__subscriberSyncMessageHandler=onMessage;
