@@ -187,6 +187,15 @@ public final class WebBridge {
                             .header("token-key", MODEM_KEY)
                             .header("token-id", "SDK_TECH");
                     addPostBody(upstreamRequest, body, headers);
+                } else if ("/api/thicong/baoHong/doKiem".equals(route) && "POST".equals(httpMethod)) {
+                    upstreamRequest = new Request.Builder()
+                            .url(UPSTREAM + "/app-thicong/baoHong/doKiem")
+                            .header("Accept", "application/json")
+                            .header("Content-Type", "application/json")
+                            .header("Authorization", headerValue(headers, "authorization"))
+                            .header("selectedmenuid", headerValueOr(headers, "selectedmenuid", "10299"))
+                            .header("app-secret", headerValue(headers, "app-secret"));
+                    addPostBody(upstreamRequest, body, headers);
                 } else if ("/api/thicong/dsVatTuThiCong".equals(route) && "POST".equals(httpMethod)) {
                     String query = incoming.encodedQuery() == null ? "" : "?" + incoming.encodedQuery();
                     upstreamRequest = new Request.Builder()
