@@ -2354,51 +2354,51 @@ async function viewTopology(){
 
 function errorPanel(e){$('panel').innerHTML=`<div class="status err">✗ ${esc(e.message)}</div>`}
 
-/* RESET PORT: Serial -> tra SLID (kieu=6) -> xác nhận -> reset bằng SLID (kieu=1). */
+/* RESET PORT: tìm ACC + SLID theo Serial bằng getDeviceInfo, reset theo SLID. */
 async function resetPortFromSerial(){
   const serialNumber=String($('serial')?.value||'').trim();
   if(!serialNumber){toast('Nhập Serial VNPT trước khi reset port',false);return;}
   if(/[;\n,]/.test(serialNumber)){toast('RESET PORT chỉ nhận một Serial mỗi lần',false);return;}
-  if(!confirm('Bạn muốn tra SLID để RESET PORT cho Serial '+serialNumber+'?'))return;
   if(!beginAction())return;
   const button=$('resetPortBtn');
   const oldText=button?button.textContent:'RESET PORT';
-  if(button){button.disabled=true;button.textContent='Đang tra...';}
+  if(button){button.disabled=true;button.textContent='Đang tìm ACC...';}
   try{
     const tokenData=getValidToken();
     if(!tokenData?.access_token)throw new Error('Phiên OneLink chưa đăng nhập hoặc access token đã hết hạn.');
+
+    toast('Đang tìm ACC theo Serial '+serialNumber+'...');
+    const deviceResponse=await apiGet('/getDeviceInfo',{serialNumber});
+    const deviceBody=deviceResponse?.body;
+    const account=String(deviceBody?.pppoeUsername||'').trim();
+    const slid=String(deviceBody?.menID||'').trim();
+    if(!account&&!slid)throw new Error('Không tìm thấy ACC hoặc SLID (menID) theo Serial '+serialNumber+'.');
+    if(!slid)throw new Error('Đã tìm thấy ACC '+(account||'(không có)')+' nhưng API không trả về SLID (menID), chưa thể RESET PORT.');
+
+    if(!confirm('Serial: '+serialNumber+'\nACC: '+(account||'không tìm thấy')+'\nSLID: '+slid+'\nXác nhận RESET PORT bằng SLID này?'))return;
+
     const now=new Date();
     const pad=n=>String(n).padStart(2,'0');
     const dateText=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
     const timeText=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
     const endpoint='/api/thicong/baoHong/doKiem';
     const headers={
-      'Accept':'application/json',
-      'Content-Type':'application/json',
-      'Authorization':'Bearer '+tokenData.access_token,
+      'accept':'application/json',
+      'content-type':'application/json',
+      'authorization':'Bearer '+tokenData.access_token,
       'selectedmenuid':'10299',
       'app-secret':buildThicongAppSecret(tokenData)
     };
-    const baseBody={maTb:serialNumber,profile:{date:dateText,lyDo:'',newPass:'',speed:'',time:timeText},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:10299};
-    if(button)button.textContent='Đang tra SLID...';
-    toast('Đang tra SLID theo Serial '+serialNumber+'...');
-    const lookupResponse=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify({...baseBody,kieu:6})});
-    const lookupText=await lookupResponse.text();
-    let lookupJson;try{lookupJson=JSON.parse(lookupText)}catch(e){throw new Error('Phản hồi tra SLID không phải JSON: '+lookupText.slice(0,180));}
-    if(!lookupResponse.ok||(lookupJson.error_code&&lookupJson.error_code!=='BSS-00000000'))throw new Error(lookupJson.message_detail||lookupJson.message||('API tra SLID HTTP '+lookupResponse.status));
-    const detail=String(lookupJson.data||'');
-    const match=detail.match(/Men\s*ID\s*:\s*([^<\r\n]+)/i);
-    const slid=match&&match[1]?match[1].trim():'';
-    if(!slid)throw new Error('Không tìm thấy Men ID/SLID trong kết quả tra Serial.');
-    if(button)button.textContent='Xác nhận reset...';
-    if(!confirm('Đã lấy được SLID: '+slid+'\nBạn xác nhận RESET PORT?'))return;
+    const body={kieu:1,maTb:slid,profile:{date:dateText,lyDo:'',newPass:'',speed:'',time:timeText},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:10299};
+
     if(button)button.textContent='Đang reset...';
-    toast('Đang gửi lệnh RESET PORT...');
-    const resetResponse=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify({...baseBody,kieu:1,maTb:slid})});
-    const resetText=await resetResponse.text();
-    let resetJson;try{resetJson=JSON.parse(resetText)}catch(e){throw new Error('Phản hồi RESET PORT không phải JSON: '+resetText.slice(0,180));}
-    if(!resetResponse.ok||(resetJson.error_code&&resetJson.error_code!=='BSS-00000000'))throw new Error(resetJson.message_detail||resetJson.message||('RESET PORT HTTP '+resetResponse.status));
-    toast('RESET PORT thành công — Serial: '+serialNumber+' | SLID: '+slid,true);
+    toast('Đang gửi RESET PORT bằng SLID '+slid+'...');
+    const response=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify(body)});
+    const responseText=await response.text();
+    let result;try{result=JSON.parse(responseText)}catch(e){throw new Error('Phản hồi RESET PORT không phải JSON: '+responseText.slice(0,180));}
+    const apiError=result.error_code||result.error;
+    if(!response.ok||(apiError&&apiError!=='BSS-00000000'&&apiError!==0&&apiError!=='0'))throw new Error(result.message_detail||result.message||('RESET PORT HTTP '+response.status));
+    toast('RESET PORT thành công — Serial: '+serialNumber+' | ACC: '+(account||'không có')+' | SLID: '+slid,true);
   }catch(error){
     console.error('[RESET PORT]',error);
     toast('RESET PORT lỗi: '+(error?.message||String(error)),false);
