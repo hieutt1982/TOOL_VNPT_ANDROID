@@ -85,11 +85,17 @@
     const text=res.body||'';
     return {ok:res.status>=200&&res.status<300,status:res.status,headers:res.headers,text:async()=>text,json:async()=>JSON.parse(text)};
   };
+  window.__vnptSyncLogs=window.__vnptSyncLogs||{quick:[],raw:[]};
+  window.__appendSubscriberLog=function(quick,raw){const b=window.__vnptSyncLogs;if(quick)b.quick.push(`[${new Date().toLocaleTimeString('vi-VN',{hour12:false})}]\n${quick}`);if(raw)b.raw.push(`[${new Date().toLocaleTimeString('vi-VN',{hour12:false})}]\n${raw}`);b.quick=b.quick.slice(-250);b.raw=b.raw.slice(-250);};
   const nativeFetch=window.fetch.bind(window);
   window.fetch=function(input,init={}){
     const u=new URL(typeof input==='string'?input:input.url,location.href);
     if(u.origin===location.origin && !u.pathname.startsWith('/api/')) return window.__nodeDispatch(input,init);
-    if(u.origin===location.origin && u.pathname.startsWith('/api/')) return window.__nodeDispatch(input,init);
+    if(u.origin===location.origin && u.pathname.startsWith('/api/')) {
+      const method=String(init.method||'GET').toUpperCase();
+      if((u.pathname.endsWith('/api/logs')&&method==='DELETE')||u.pathname.endsWith('/api/logs/clear'))window.__vnptSyncLogs={quick:[],raw:[]};
+      return window.__nodeDispatch(input,init).then(async response=>{if(!u.pathname.endsWith('/api/status'))return response;const data=await response.json();const extra=window.__vnptSyncLogs||{quick:[],raw:[]};data.logs=(data.logs||[]).concat(extra.quick||[]).slice(-250);data.rawLogs=(data.rawLogs||[]).concat(extra.raw||[]).slice(-250);return Object.assign({},response,{json:async()=>data});});
+    }
     return nativeFetch(input,init);
   };
   window.__nodeOpen = async function() {
@@ -111,7 +117,7 @@ window.syncSubscriberData = function(button) {
   if(window.__subscriberSyncFrame){say('Đang lấy dữ liệu thuê bao...');return;}
   if(button){window.__subscriberSyncButtonText=button.innerHTML;button.disabled=true;button.innerHTML='⟳ &nbsp;ĐANG LẤY...';}
   say('Đang lấy dữ liệu thuê bao qua OneLink...');
-  if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Bắt đầu đồng bộ thông tin thuê bao.',raw:'Bắt đầu đồng bộ thông tin thuê bao qua OneLink.'})}).catch(()=>{});
+  if(window.__appendSubscriberLog)window.__appendSubscriberLog('Bắt đầu lấy thông tin thuê bao.','Bắt đầu quy trình lấy thông tin thuê bao qua OneLink.');
   const frame=document.createElement('iframe');
   frame.title='Đồng bộ dữ liệu thuê bao';
   frame.setAttribute('aria-hidden','true');
@@ -129,7 +135,7 @@ window.syncSubscriberData = function(button) {
     if(event.source!==frame.contentWindow||!event.data)return;
     const message=event.data;
     if(message.type==='doki-sync-log'){
-      try{if(window.__nodeDispatch)await window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:message.quick||'',raw:message.raw||''})});}catch(e){}
+      try{if(window.__appendSubscriberLog)window.__appendSubscriberLog(message.quick||'',message.raw||'');}catch(e){}
       return;
     }
     if(message.type==='doki-http-request'){
@@ -153,8 +159,8 @@ window.syncSubscriberData = function(button) {
       assign(['wifi5gName','wifi5g'],fields.wifi5gName);
       assign(['wifi5gPassword','pass5g'],fields.wifi5gPassword);
       finish(message.summary||'Đã nhận dữ liệu thuê bao và điền vào form.');
-      if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Đồng bộ thành công: '+(message.summary||'đã điền dữ liệu vào form.'),raw:'Kết quả đồng bộ: '+JSON.stringify(fields)})}).catch(()=>{});
-    }else {finish(message.error||'Không lấy được dữ liệu thuê bao.');if(window.__nodeDispatch)window.__nodeDispatch('/api/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({quick:'Đồng bộ lỗi: '+(message.error||'Không lấy được dữ liệu thuê bao.'),raw:'Lỗi đồng bộ: '+(message.error||'Không lấy được dữ liệu thuê bao.')})}).catch(()=>{});}
+      if(window.__appendSubscriberLog)window.__appendSubscriberLog('Lấy thông tin thành công: '+(message.summary||'đã điền dữ liệu vào form.'),'Kết quả lấy thông tin đã điền vào form: '+JSON.stringify(fields));
+    }else {finish(message.error||'Không lấy được dữ liệu thuê bao.');if(window.__appendSubscriberLog)window.__appendSubscriberLog('Lỗi lấy thông tin: '+(message.error||'Không lấy được dữ liệu thuê bao.'),'Lỗi lấy thông tin: '+(message.error||'Không lấy được dữ liệu thuê bao.'));}
   };
   if(window.__subscriberSyncMessageHandler)window.removeEventListener('message',window.__subscriberSyncMessageHandler);
   window.__subscriberSyncMessageHandler=onMessage;
