@@ -621,6 +621,13 @@ pre{max-width:100%!important;overflow:auto!important}
 #bulkSearchArea .bulk-ok,#bulkSearchArea .bulk-err{font-size:12px !important;line-height:1.25 !important}
 @media(max-width:600px){#bulkSearchArea .bulk-title{font-size:16px !important}#bulkSearchArea .bulk-summary{font-size:13px !important}#bulkSearchArea .bulk-table,#bulkSearchArea .bulk-table th,#bulkSearchArea .bulk-table td,#bulkSearchArea .bulk-ok,#bulkSearchArea .bulk-err{font-size:12px !important}}
 </style>
+
+<style id="reset-port-style">
+#serialActionRow{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px;margin:8px 0 12px}
+#serialActionRow button{width:100%;min-width:0;min-height:48px;margin:0;padding:8px 6px;font-size:15px;line-height:1.15;white-space:normal}
+#serialActionRow #resetPortBtn{background:#dc2626;color:#fff}
+@media(max-width:380px){#serialActionRow{grid-template-columns:minmax(0,1fr) 105px;gap:6px}#serialActionRow button{font-size:13px;padding:7px 4px}}
+</style>
 </head>
 <body>
 
@@ -649,7 +656,10 @@ pre{max-width:100%!important;overflow:auto!important}
   <input type="text" id="serial" spellcheck="false" autocomplete="on"
     placeholder="VNPTxxxxxxx1;VNPTxxxxxx2">
 
-  <button id="serialActionBtn" onclick="handleSerialInput()">KẾT NỐI / TÌM SERIAL</button>
+  <div id="serialActionRow">
+    <button id="serialActionBtn" onclick="handleSerialInput()">KẾT NỐI / TÌM SERIAL</button>
+    <button type="button" id="resetPortBtn" class="danger" onclick="resetPortFromSerial()">RESET PORT</button>
+  </div>
   
   <div id="connectProgress" class="feature-progress hidden">
     <div class="fp-head">
@@ -2343,6 +2353,61 @@ async function viewTopology(){
 }
 
 function errorPanel(e){$('panel').innerHTML=`<div class="status err">✗ ${esc(e.message)}</div>`}
+
+/* RESET PORT: Serial -> tra SLID (kieu=6) -> xác nhận -> reset bằng SLID (kieu=1). */
+async function resetPortFromSerial(){
+  const serialNumber=String($('serial')?.value||'').trim();
+  if(!serialNumber){toast('Nhập Serial VNPT trước khi reset port',false);return;}
+  if(/[;\n,]/.test(serialNumber)){toast('RESET PORT chỉ nhận một Serial mỗi lần',false);return;}
+  if(!confirm('Bạn muốn tra SLID để RESET PORT cho Serial '+serialNumber+'?'))return;
+  if(!beginAction())return;
+  const button=$('resetPortBtn');
+  const oldText=button?button.textContent:'RESET PORT';
+  if(button){button.disabled=true;button.textContent='Đang tra...';}
+  try{
+    const tokenData=getValidToken();
+    if(!tokenData?.access_token)throw new Error('Phiên OneLink chưa đăng nhập hoặc access token đã hết hạn.');
+    const now=new Date();
+    const pad=n=>String(n).padStart(2,'0');
+    const dateText=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+    const timeText=pad(now.getDate())+'/'+pad(now.getMonth()+1)+'/'+now.getFullYear()+' '+pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
+    const endpoint='/api/thicong/baoHong/doKiem';
+    const headers={
+      'Accept':'application/json',
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+tokenData.access_token,
+      'selectedmenuid':'10299',
+      'app-secret':buildThicongAppSecret(tokenData)
+    };
+    const baseBody={maTb:serialNumber,profile:{date:dateText,lyDo:'',newPass:'',speed:'',time:timeText},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:10299};
+    if(button)button.textContent='Đang tra SLID...';
+    toast('Đang tra SLID theo Serial '+serialNumber+'...');
+    const lookupResponse=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify({...baseBody,kieu:6})});
+    const lookupText=await lookupResponse.text();
+    let lookupJson;try{lookupJson=JSON.parse(lookupText)}catch(e){throw new Error('Phản hồi tra SLID không phải JSON: '+lookupText.slice(0,180));}
+    if(!lookupResponse.ok||(lookupJson.error_code&&lookupJson.error_code!=='BSS-00000000'))throw new Error(lookupJson.message_detail||lookupJson.message||('API tra SLID HTTP '+lookupResponse.status));
+    const detail=String(lookupJson.data||'');
+    const match=detail.match(/Men\s*ID\s*:\s*([^<\r\n]+)/i);
+    const slid=match&&match[1]?match[1].trim():'';
+    if(!slid)throw new Error('Không tìm thấy Men ID/SLID trong kết quả tra Serial.');
+    if(button)button.textContent='Xác nhận reset...';
+    if(!confirm('Đã lấy được SLID: '+slid+'\nBạn xác nhận RESET PORT?'))return;
+    if(button)button.textContent='Đang reset...';
+    toast('Đang gửi lệnh RESET PORT...');
+    const resetResponse=await fetch(endpoint,{method:'POST',headers,body:JSON.stringify({...baseBody,kieu:1,maTb:slid})});
+    const resetText=await resetResponse.text();
+    let resetJson;try{resetJson=JSON.parse(resetText)}catch(e){throw new Error('Phản hồi RESET PORT không phải JSON: '+resetText.slice(0,180));}
+    if(!resetResponse.ok||(resetJson.error_code&&resetJson.error_code!=='BSS-00000000'))throw new Error(resetJson.message_detail||resetJson.message||('RESET PORT HTTP '+resetResponse.status));
+    toast('RESET PORT thành công — Serial: '+serialNumber+' | SLID: '+slid,true);
+  }catch(error){
+    console.error('[RESET PORT]',error);
+    toast('RESET PORT lỗi: '+(error?.message||String(error)),false);
+  }finally{
+    if(button){button.disabled=false;button.textContent=oldText;}
+    endAction();
+  }
+}
+
 </script>
 </body>
 </html>
