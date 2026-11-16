@@ -278,7 +278,9 @@ button:disabled{opacity:.45}
 .log{height:300px;overflow:auto;font:14px monospace;line-height:1.45;white-space:pre-wrap;background:#0b0d0f;padding:12px;border-radius:12px}.log-tools{display:flex;flex-direction:column;gap:8px;margin:8px 0 12px}.log-modes,.log-actions{display:flex;align-items:center;gap:12px}.log-mode{display:flex!important;align-items:center;gap:8px;margin:0!important;font-size:18px;white-space:nowrap}.log-mode input[type=radio]{width:24px!important;height:24px;margin:0;flex:none}.log-actions{width:100%}.log-actions button{width:50%!important;flex:1;margin:0;padding:12px 8px;font-size:18px}
 .note{margin-top:8px;color:#aeb6bf;font-size:13px;line-height:1.4}
 @media(max-width:520px){.grid{grid-template-columns:1fr}body{font-size:17px}.wrap{padding:9px}.card{padding:14px}.header h1{font-size:24px}}
-#status{display:none!important}</style></head><body><div class="wrap">
+#status{display:none!important}
+.toggle-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;align-items:stretch}.toggle-row .step-toggle{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;margin:0!important;min-width:0;min-height:72px;white-space:normal;text-align:center;padding:7px 2px;background:#111820;border:1px solid #3b4652;border-radius:10px;font-size:11px}.toggle-row .toggle-name{display:block;min-width:0!important;width:100%;font-size:11px;line-height:1.15;color:#8fc7ff;font-weight:700;overflow-wrap:anywhere}.toggle-row .step-toggle input[type="checkbox"]{appearance:auto;-webkit-appearance:checkbox;width:19px;height:19px;margin:0;padding:0;flex:none}.toggle-row .step-toggle span:last-child{min-width:0!important;font-size:10px;line-height:1;color:#d7e0ea}
+</style></head><body><div class="wrap">
 <div class="top-menu"><button type="button" onclick="location.href='index.html'">☰ MENU</button></div>
 
 <div class="card">
@@ -296,12 +298,12 @@ button:disabled{opacity:.45}
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div><label class="step-toggle"><input id="doSlid" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">2.</span>SLID GPON</div></div>
   <label>SLID GPON</label><input id="slid" value="A00012345">
 </div>
 
 <div class="card">
-  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div><label class="step-toggle"><input id="doPppoe" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div>
+  <div class="section-head"><div class="section-title"><span class="step">3.</span>CẤU HÌNH WAN PPPoE</div></div>
   <div class="grid">
     <div><label>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div>
     <div><label>VLAN WAN</label><input value="11" disabled></div>
@@ -313,13 +315,20 @@ button:disabled{opacity:.45}
 <div class="card">
   <div class="section-title"><span class="step">4.</span>WIFI</div>
   <div class="grid">
-    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div><label class="step-toggle"><input id="doWifi2g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2g" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="pass2g" value="1234567890"></div>
-    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div><label class="step-toggle"><input id="doWifi5g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label></div><label>Tên WiFi 5 GHz</label><input id="wifi5g" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="pass5g" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 2.4 GHz</div></div><label>Tên WiFi 2.4 GHz</label><input id="wifi2g" value="WiFi 2.4G"><label>Mật khẩu WiFi 2.4 GHz</label><input id="pass2g" value="1234567890"></div>
+    <div><div class="section-head"><div class="section-title">WiFi 5 GHz</div></div><label>Tên WiFi 5 GHz</label><input id="wifi5g" value="WiFi 5G"><label>Mật khẩu WiFi 5 GHz</label><input id="pass5g" value="1234567890"></div>
   </div>
 </div>
 
 <div class="card">
-  <button class="run" id="run">▶ BẮT ĐẦU CẤU HÌNH</button>
+  
+<div class="toggle-row">
+    <label class="step-toggle"><span class="toggle-name">SLID GPON</span><input id="doSlid" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label>
+    <label class="step-toggle"><span class="toggle-name">WAN PPPoE</span><input id="doPppoe" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label>
+    <label class="step-toggle"><span class="toggle-name">WiFi 2.4 GHz</span><input id="doWifi2g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label>
+    <label class="step-toggle"><span class="toggle-name">WiFi 5 GHz</span><input id="doWifi5g" type="checkbox" checked onchange="this.nextElementSibling.textContent=this.checked?'Enable':'Disable'"><span>Enable</span></label>
+  </div>
+<button class="run" id="run">▶ BẮT ĐẦU CẤU HÌNH</button>
   <div id="status" class="status">Sẵn sàng.</div>
 </div>
 
