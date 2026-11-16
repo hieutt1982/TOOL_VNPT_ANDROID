@@ -958,6 +958,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
 .log-mode{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap}
 .log-mode input[type="radio"]{appearance:none!important;-webkit-appearance:none!important;display:inline-block!important;box-sizing:border-box!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;padding:0!important;margin:0!important;border:2px solid #9db5d2!important;border-radius:50%!important;background:#fff!important;flex:0 0 24px!important;box-shadow:none!important}
 .log-mode input[type="radio"]:checked{border:6px solid #075ff0!important;background:#fff!important}
+
+
+/* Uniform typography and dimensions for every form textbox */
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),.field select{box-sizing:border-box!important;width:100%!important;min-height:46px!important;height:auto!important;padding:8px 10px!important;font-family:Arial,sans-serif!important;font-size:17px!important;font-weight:400!important;line-height:1.2!important}
+.field input:not([type="checkbox"]):not([type="radio"])::placeholder{font:inherit!important;opacity:.65}
+@media(max-width:380px){.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),.field select{min-height:44px!important;font-size:16px!important;padding:8px 10px!important}}
 </style>
 </head>
 <body>
@@ -1117,6 +1123,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
 .log-mode{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap}
 .log-mode input[type="radio"]{appearance:none!important;-webkit-appearance:none!important;display:inline-block!important;box-sizing:border-box!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;max-width:24px!important;max-height:24px!important;padding:0!important;margin:0!important;border:2px solid #9db5d2!important;border-radius:50%!important;background:#fff!important;flex:0 0 24px!important;box-shadow:none!important}
 .log-mode input[type="radio"]:checked{border:6px solid #075ff0!important;background:#fff!important}
+
+
+/* Uniform typography and dimensions for every form textbox */
+.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),.field select{box-sizing:border-box!important;width:100%!important;min-height:46px!important;height:auto!important;padding:8px 10px!important;font-family:Arial,sans-serif!important;font-size:17px!important;font-weight:400!important;line-height:1.2!important}
+.field input:not([type="checkbox"]):not([type="radio"])::placeholder{font:inherit!important;opacity:.65}
+@media(max-width:380px){.field input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),.field select{min-height:44px!important;font-size:16px!important;padding:8px 10px!important}}
 </style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
   <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
