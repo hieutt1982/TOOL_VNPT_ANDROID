@@ -921,6 +921,24 @@ const HTML = `<!doctype html>
 .wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
 .log{height:320px!important;min-height:38vh!important}
 @media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important}}
+
+/* One-step larger Android form sizing; keep lookup button compact */
+@media(max-width:620px){
+ body{font-size:18px}
+ .card-head h2{font-size:21px;line-height:1.2}
+ .field label{font-size:17px;line-height:1.2}
+ input,select{height:auto;min-height:50px;padding:8px 10px;font-size:19px;line-height:1.2}
+ .sync-fetch{min-width:150px;min-height:46px;padding:8px 12px!important;font-size:15px!important;line-height:1.2}
+ .sync-card .sync-note{font-size:15px;line-height:1.35}
+ .step-option{min-height:66px;font-size:13px;gap:6px}
+ .step-option input{width:29px;height:29px}
+ .step-option span{font-size:13px!important}
+ .run{min-height:60px;height:auto;font-size:21px!important;padding:11px}
+ .status{font-size:17px;line-height:1.3}
+ .log-mode{font-size:17px}
+ .log-actions button{min-height:48px;font-size:17px}
+ .log{font-size:15px;line-height:1.4}
+}
 </style>
 </head>
 <body>
@@ -1038,6 +1056,24 @@ function configurePage(title, apiPrefix) {
 .wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
 .log{height:320px!important;min-height:38vh!important}
 @media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important}}
+
+/* One-step larger Android form sizing; keep lookup button compact */
+@media(max-width:620px){
+ body{font-size:18px}
+ .card-head h2{font-size:21px;line-height:1.2}
+ .field label{font-size:17px;line-height:1.2}
+ input,select{height:auto;min-height:50px;padding:8px 10px;font-size:19px;line-height:1.2}
+ .sync-fetch{min-width:150px;min-height:46px;padding:8px 12px!important;font-size:15px!important;line-height:1.2}
+ .sync-card .sync-note{font-size:15px;line-height:1.35}
+ .step-option{min-height:66px;font-size:13px;gap:6px}
+ .step-option input{width:29px;height:29px}
+ .step-option span{font-size:13px!important}
+ .run{min-height:60px;height:auto;font-size:21px!important;padding:11px}
+ .status{font-size:17px;line-height:1.3}
+ .log-mode{font-size:17px}
+ .log-actions button{min-height:48px;font-size:17px}
+ .log{font-size:15px;line-height:1.4}
+}
 </style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
   <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
