@@ -150,7 +150,7 @@ public final class WebBridge {
                     result.put("ok", true);
                     result.put("status", 200);
                     result.put("text", "{\"ok\":true}");
-                    deliver(id, result);
+                    deliverOneLink(id, result);
                     return;
                 }
 
@@ -213,7 +213,7 @@ public final class WebBridge {
                 diag("ONELINK!", route + " failed: " + Log.getStackTraceString(error));
                 putError(result, error);
             }
-            deliver(id, result);
+            deliverOneLink(id, result);
         });
     }
 
@@ -284,6 +284,13 @@ public final class WebBridge {
         String raw = result.toString();
         mainHandler.post(() -> webView.evaluateJavascript(
                 "window.__nativeHttpDone(" + JSONObject.quote(id) + "," +
+                        JSONObject.quote(raw) + ")", null));
+    }
+
+    private void deliverOneLink(String id, JSONObject result) {
+        String raw = result.toString();
+        mainHandler.post(() -> webView.evaluateJavascript(
+                "window.__oneLinkHttpDone(" + JSONObject.quote(id) + "," +
                         JSONObject.quote(raw) + ")", null));
     }
 
