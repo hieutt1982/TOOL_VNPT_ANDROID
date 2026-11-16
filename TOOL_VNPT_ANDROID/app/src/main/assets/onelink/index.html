@@ -629,13 +629,7 @@ pre{max-width:100%!important;overflow:auto!important}
   <small id="deviceTitle"></small> 
   <br> 
 
-  <button id="logoutBtn"
-          onclick="logout()"
-          class="hidden"
-          title="Đăng xuất"
-          style="margin-top:8px;background:#dc2626;width:auto;padding:8px 14px;">
-    🚪Đăng xuất
-  </button>
+
  
   
 </header>
@@ -734,7 +728,7 @@ const TOKEN_KEY = "onebss_token";
 function loadToken(){try{const raw=AndroidBridge.getOneLinkToken();if(raw){const token=JSON.parse(raw);localStorage.setItem(TOKEN_KEY,raw);return token}}catch(e){}try{const raw=localStorage.getItem(TOKEN_KEY);return raw?JSON.parse(raw):null}catch(e){return null}}
 function getValidToken(){const token=loadToken();if(!token||!token.access_token)return null;if(token.expires_at&&Date.now()/1000>=Number(token.expires_at)){localStorage.removeItem(TOKEN_KEY);try{AndroidBridge.clearOneLinkToken()}catch(e){}return null}return token}
 function logout(){localStorage.removeItem(TOKEN_KEY);try{AndroidBridge.clearOneLinkToken()}catch(e){}location.replace('../index.html')}
-function updateLoginUI(){if(!getValidToken()){location.replace('../index.html');return}document.getElementById('login').classList.remove('hidden');document.getElementById('logoutBtn').classList.remove('hidden')}
+function updateLoginUI(){if(!getValidToken()){location.replace('../index.html');return}document.getElementById('login').classList.remove('hidden')}
 window.addEventListener('DOMContentLoaded',updateLoginUI);
 
 const API='/api/modem';
