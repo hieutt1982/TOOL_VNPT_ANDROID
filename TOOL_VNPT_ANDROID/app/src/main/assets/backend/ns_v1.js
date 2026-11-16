@@ -911,28 +911,44 @@ const HTML = `<!doctype html>
 }
 .sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}.sync-fetch{width:auto!important;min-width:180px;height:48px;margin:0!important;padding:8px 18px!important;border:0;border-radius:11px!important;background:#0877e8!important;color:#fff!important;font-size:18px!important;font-weight:800}.sync-card .sync-note{margin-top:9px;font-size:16px}.sync-card{border-color:#0877e8}.wifi-grid{grid-template-columns:minmax(0,1fr)!important}.log{height:320px!important;min-height:38vh!important;font-size:16px!important;line-height:1.5!important}@media(max-width:520px){.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}.log{height:280px!important;min-height:34vh!important;font-size:16px!important;line-height:1.5!important}}
 
-/* Readable form typography (+2px) and sync/log layout */
+
+/* Readable controls sized to fit enlarged text */
 body{font-size:18px!important}
-.card-head h2{font-size:clamp(20px,3vw,27px)!important}
-.field label{font-size:18px!important}
-input,select{font-size:20px!important}
-.status{font-size:18px!important}
-.step-toggle{font-size:17px!important}
-.step-option{font-size:17px!important}
-.step-option span{font-size:17px!important}
-.run{font-size:24px!important}
-.log-mode{font-size:18px!important}
-.log-actions button{font-size:18px!important}
-.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
-.sync-fetch{min-width:180px;height:48px;font-size:18px!important}
-.sync-card .sync-note{font-size:16px!important}
-.wifi-grid{grid-template-columns:minmax(0,1fr)!important}
+.card-head{min-height:64px}
+.card-head h2{font-size:clamp(20px,2.6vw,26px)!important;line-height:1.2!important;min-width:0;flex:1;white-space:normal;overflow-wrap:anywhere}
+.card-head .head-icon{flex:none}
+.field label{font-size:18px!important;line-height:1.2!important;min-height:26px}
+input,select{height:auto!important;min-height:62px!important;padding:10px 13px!important;font-size:20px!important;line-height:1.2!important;white-space:normal}
+.field-wrap input{padding-right:54px!important}
+.card-body{padding:16px!important}
+.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:end}
+.sync-fetch{min-width:200px;height:auto!important;min-height:64px!important;padding:12px 18px!important;font-size:19px!important;line-height:1.2!important;white-space:normal}
+.sync-card .sync-note{font-size:16px!important;line-height:1.4!important}
+.wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+.toggle-row{min-height:92px;align-items:stretch}
+.step-option{min-height:76px;font-size:16px!important;line-height:1.2!important;gap:8px}
+.step-option input{width:30px!important;height:30px!important;flex:none}
+.step-option span{min-width:0!important;font-size:16px!important;line-height:1.2!important}
+.run{height:auto!important;min-height:68px!important;padding:12px!important;font-size:21px!important;line-height:1.2!important;white-space:normal}
+.status{min-height:54px;font-size:17px!important;line-height:1.35!important}
+.log-tools{min-height:58px;flex-wrap:wrap}
+.log-mode{font-size:18px!important;line-height:1.2!important}
+.log-actions button{min-height:52px;font-size:18px!important}
 .log{height:320px!important;min-height:38vh!important;font-size:16px!important;line-height:1.5!important}
-@media(max-width:620px){.field label{font-size:16px!important}input,select{font-size:18px!important}.card-head h2{font-size:20px!important}.run{font-size:21px!important}.log{height:280px!important;min-height:34vh!important;font-size:16px!important}.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}}
+@media(max-width:620px){
+ .card-head{min-height:60px}.card-head h2{font-size:22px!important}
+ .grid{gap:12px}.field label{font-size:17px!important}
+ input,select{min-height:58px!important;font-size:19px!important;padding:9px 11px!important}
+ .sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important;min-height:62px!important}
+ .toggle-row{min-height:88px;padding:7px 4px}.step-option{min-height:72px;flex-direction:column;gap:5px;padding:4px 2px}
+ .step-option span{font-size:14px!important;text-align:center}
+ .run{min-height:64px!important;font-size:19px!important}
+ .log{height:280px!important;min-height:34vh!important;font-size:16px!important}
+}
 </style>
 </head>
 <body>
-<div class="wrap"><header class="appbar"><button class="back" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">‹</button><span class="router"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M8 8h32a5 5 0 0 1 5 5v5H3v-5a5 5 0 0 1 5-5Zm-5 14h42v10a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V22Zm9 7h5m14 0h5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 8V4m18 4V4" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>CẤU HÌNH MODEM</strong><button class="menu-home" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">⋮</button></header><section class="card sync-card"><div class="card-head"><h2><span class="head-icon">⇄</span>ĐỒNG BỘ THÔNG TIN THUÊ BAO</h2></div><div class="card-body"><div class="sync-lookup"><div class="field"><label for="subscriberAcc">ACC thuê bao</label><input id="subscriberAcc" type="text" placeholder="Nhập ACC thuê bao cần tra cứu" autocomplete="off"></div><button type="button" class="sync-fetch" onclick="window.syncSubscriberData(this)">LẤY THÔNG TIN</button></div><div class="sync-note" id="syncStatus">Nhập ACC rồi chọn LẤY THÔNG TIN để điền dữ liệu vào form.</div></div></section><form id="configForm"><section class="card"><div class="card-head"><h2><span class="head-icon">▣</span>1. ĐĂNG NHẬP MODEM</h2></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>IP Modem</label><input id="ip" value="192.168.1.1" placeholder="192.168.1.1"></div><div class="field"><label><span class="ico">👤</span>Tài khoản</label><input id="username" value="admin"></div><div class="field full"><label><span class="ico">⚙</span>Chế độ đăng nhập</label><select id="loginMode"><option value="1">1 - Modem vừa reset / admin-admin</option><option value="2">2 - Modem đã đổi mật khẩu</option></select></div><div class="field full"><label id="passwordLabel"><span class="ico">🔑</span>Mật khẩu mới (nếu cần)</label><div class="field-wrap"><input id="password" type="text" placeholder="Nhập mật khẩu mới cho modem"></div></div></div></div></section><section class="card"><div class="card-head"><h2><span class="head-icon">♧</span>2. SLID GPON</h2><span class="enable-badge" id="badge-doSlid">Enable</span></div><div class="card-body"><div class="field"><label>SLID GPON</label><input id="slid" value="A00012345"></div></div></section><section class="card pppoe-card"><div class="card-head"><h2><span class="head-icon">◎</span>3. WAN - PPPoE</h2><span class="enable-badge" id="badge-doPppoe">Enable</span></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div><div class="field"><label><span class="ico">♧</span>VLAN WAN</label><input id="vlan" value="11"></div><div class="field full"><label><span class="ico">🔑</span>Mật khẩu PPPoE</label><div class="field-wrap"><input id="pppoePassword" type="text" value="abcd1234"></div></div></div></div></section><div class="wifi-grid"><section class="card wifi-card band24"><div class="card-head"><h2><span class="head-icon">◉</span>4. WiFi 2.4 GHz</h2><span class="enable-badge" id="badge-doWifi2g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi2gName" type="text" value="WiFi 2.4G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi2gPassword" type="text" value="1234567890"></div></div></div></section><section class="card wifi-card band5"><div class="card-head"><h2><span class="head-icon">◉</span>5. WiFi 5 GHz</h2><span class="enable-badge" id="badge-doWifi5g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi5gName" type="text" value="WiFi 5G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi5gPassword" type="text" value="1234567890"></div></div></div></section></div><section class="toggle-row"><label class="step-option"><input id="doSlid" type="checkbox" checked onchange="syncStepBadges()"><span>SLID<br>GPON</span></label><label class="step-option"><input id="doPppoe" type="checkbox" checked onchange="syncStepBadges()"><span>WAN<br>PPPoE</span></label><label class="step-option"><input id="doWifi2g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>2.4 GHz</span></label><label class="step-option"><input id="doWifi5g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>5 GHz</span></label></section><section class="action-card"><button class="run" type="button" id="run">▶ &nbsp;BẮT ĐẦU CẤU HÌNH</button><div id="status" class="status">Sẵn sàng.</div></section></form><section class="card log-card"><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs" class="log">Chưa có log.</pre></section></div><script>function syncStepBadges(){['doSlid','doPppoe','doWifi2g','doWifi5g'].forEach(function(id){var c=document.getElementById(id),b=document.getElementById('badge-'+id);if(c&&b){b.textContent=c.checked?'Enable':'Disable';b.classList.toggle('off',!c.checked)}})}function toggleField(id,b){var e=document.getElementById(id);if(!e)return;e.type=e.type==='password'?'text':'password';b.textContent=e.type==='password'?'◉':'◎';}syncStepBadges();</script>
+<div class="wrap"><header class="appbar"><button class="back" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">‹</button><span class="router"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M8 8h32a5 5 0 0 1 5 5v5H3v-5a5 5 0 0 1 5-5Zm-5 14h42v10a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V22Zm9 7h5m14 0h5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 8V4m18 4V4" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>CẤU HÌNH MODEM</strong><button class="menu-home" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">⋮</button></header><section class="card sync-card"><div class="card-head"><h2><span class="head-icon">⇄</span>LẤY THÔNG TIN THUÊ BAO</h2></div><div class="card-body"><div class="sync-lookup"><div class="field"><label for="subscriberAcc">ACC thuê bao</label><input id="subscriberAcc" type="text" placeholder="Nhập ACC thuê bao" autocomplete="off"></div><button type="button" class="sync-fetch" onclick="window.syncSubscriberData(this)">LẤY THÔNG TIN</button></div><div class="sync-note" id="syncStatus">Nhập ACC rồi chọn LẤY THÔNG TIN để điền dữ liệu vào form.</div></div></section><form id="configForm"><section class="card"><div class="card-head"><h2><span class="head-icon">▣</span>1. ĐĂNG NHẬP MODEM</h2></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>IP Modem</label><input id="ip" value="192.168.1.1" placeholder="192.168.1.1"></div><div class="field"><label><span class="ico">👤</span>Tài khoản</label><input id="username" value="admin"></div><div class="field full"><label><span class="ico">⚙</span>Chế độ đăng nhập</label><select id="loginMode"><option value="1">1 - Modem vừa reset / admin-admin</option><option value="2">2 - Modem đã đổi mật khẩu</option></select></div><div class="field full"><label id="passwordLabel"><span class="ico">🔑</span>Mật khẩu mới (nếu cần)</label><div class="field-wrap"><input id="password" type="text" placeholder="Nhập mật khẩu mới cho modem"></div></div></div></div></section><section class="card"><div class="card-head"><h2><span class="head-icon">♧</span>2. SLID GPON</h2><span class="enable-badge" id="badge-doSlid">Enable</span></div><div class="card-body"><div class="field"><label>SLID GPON</label><input id="slid" value="A00012345"></div></div></section><section class="card pppoe-card"><div class="card-head"><h2><span class="head-icon">◎</span>3. WAN - PPPoE</h2><span class="enable-badge" id="badge-doPppoe">Enable</span></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div><div class="field"><label><span class="ico">♧</span>VLAN WAN</label><input id="vlan" value="11"></div><div class="field full"><label><span class="ico">🔑</span>Mật khẩu PPPoE</label><div class="field-wrap"><input id="pppoePassword" type="text" value="abcd1234"></div></div></div></div></section><div class="wifi-grid"><section class="card wifi-card band24"><div class="card-head"><h2><span class="head-icon">◉</span>4. WiFi 2.4 GHz</h2><span class="enable-badge" id="badge-doWifi2g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi2gName" type="text" value="WiFi 2.4G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi2gPassword" type="text" value="1234567890"></div></div></div></section><section class="card wifi-card band5"><div class="card-head"><h2><span class="head-icon">◉</span>5. WiFi 5 GHz</h2><span class="enable-badge" id="badge-doWifi5g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi5gName" type="text" value="WiFi 5G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi5gPassword" type="text" value="1234567890"></div></div></div></section></div><section class="toggle-row"><label class="step-option"><input id="doSlid" type="checkbox" checked onchange="syncStepBadges()"><span>SLID<br>GPON</span></label><label class="step-option"><input id="doPppoe" type="checkbox" checked onchange="syncStepBadges()"><span>WAN<br>PPPoE</span></label><label class="step-option"><input id="doWifi2g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>2.4 GHz</span></label><label class="step-option"><input id="doWifi5g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>5 GHz</span></label></section><section class="action-card"><button class="run" type="button" id="run">▶ &nbsp;BẮT ĐẦU CẤU HÌNH</button><div id="status" class="status">Sẵn sàng.</div></section></form><section class="card log-card"><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs" class="log">Chưa có log.</pre></section></div><script>function syncStepBadges(){['doSlid','doPppoe','doWifi2g','doWifi5g'].forEach(function(id){var c=document.getElementById(id),b=document.getElementById('badge-'+id);if(c&&b){b.textContent=c.checked?'Enable':'Disable';b.classList.toggle('off',!c.checked)}})}function toggleField(id,b){var e=document.getElementById(id);if(!e)return;e.type=e.type==='password'?'text':'password';b.textContent=e.type==='password'?'◉':'◎';}syncStepBadges();</script>
 <script>
 (function(){
   function byId(id){ return document.getElementById(id); }
@@ -1036,24 +1052,40 @@ function configurePage(title, apiPrefix) {
   pre{margin:0;height:65vh;min-height:300px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#080c10;border-radius:9px;padding:14px;color:#d8e4ef;font:13px/1.55 Consolas,monospace}
   @media(max-width:600px){main{margin:0;padding:8px}.card{padding:12px}pre{height:72vh}}
   #status{display:none!important}
-/* Readable form typography (+2px) and sync/log layout */
+
+/* Readable controls sized to fit enlarged text */
 body{font-size:18px!important}
-.card-head h2{font-size:clamp(20px,3vw,27px)!important}
-.field label{font-size:18px!important}
-input,select{font-size:20px!important}
-.status{font-size:18px!important}
-.step-toggle{font-size:17px!important}
-.step-option{font-size:17px!important}
-.step-option span{font-size:17px!important}
-.run{font-size:24px!important}
-.log-mode{font-size:18px!important}
-.log-actions button{font-size:18px!important}
-.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
-.sync-fetch{min-width:180px;height:48px;font-size:18px!important}
-.sync-card .sync-note{font-size:16px!important}
-.wifi-grid{grid-template-columns:minmax(0,1fr)!important}
+.card-head{min-height:64px}
+.card-head h2{font-size:clamp(20px,2.6vw,26px)!important;line-height:1.2!important;min-width:0;flex:1;white-space:normal;overflow-wrap:anywhere}
+.card-head .head-icon{flex:none}
+.field label{font-size:18px!important;line-height:1.2!important;min-height:26px}
+input,select{height:auto!important;min-height:62px!important;padding:10px 13px!important;font-size:20px!important;line-height:1.2!important;white-space:normal}
+.field-wrap input{padding-right:54px!important}
+.card-body{padding:16px!important}
+.sync-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:end}
+.sync-fetch{min-width:200px;height:auto!important;min-height:64px!important;padding:12px 18px!important;font-size:19px!important;line-height:1.2!important;white-space:normal}
+.sync-card .sync-note{font-size:16px!important;line-height:1.4!important}
+.wifi-grid{grid-template-columns:minmax(0,1fr)!important;gap:12px!important}
+.toggle-row{min-height:92px;align-items:stretch}
+.step-option{min-height:76px;font-size:16px!important;line-height:1.2!important;gap:8px}
+.step-option input{width:30px!important;height:30px!important;flex:none}
+.step-option span{min-width:0!important;font-size:16px!important;line-height:1.2!important}
+.run{height:auto!important;min-height:68px!important;padding:12px!important;font-size:21px!important;line-height:1.2!important;white-space:normal}
+.status{min-height:54px;font-size:17px!important;line-height:1.35!important}
+.log-tools{min-height:58px;flex-wrap:wrap}
+.log-mode{font-size:18px!important;line-height:1.2!important}
+.log-actions button{min-height:52px;font-size:18px!important}
 .log{height:320px!important;min-height:38vh!important;font-size:16px!important;line-height:1.5!important}
-@media(max-width:620px){.field label{font-size:16px!important}input,select{font-size:18px!important}.card-head h2{font-size:20px!important}.run{font-size:21px!important}.log{height:280px!important;min-height:34vh!important;font-size:16px!important}.sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important}}
+@media(max-width:620px){
+ .card-head{min-height:60px}.card-head h2{font-size:22px!important}
+ .grid{gap:12px}.field label{font-size:17px!important}
+ input,select{min-height:58px!important;font-size:19px!important;padding:9px 11px!important}
+ .sync-lookup{grid-template-columns:minmax(0,1fr)}.sync-fetch{width:100%!important;min-height:62px!important}
+ .toggle-row{min-height:88px;padding:7px 4px}.step-option{min-height:72px;flex-direction:column;gap:5px;padding:4px 2px}
+ .step-option span{font-size:14px!important;text-align:center}
+ .run{min-height:64px!important;font-size:19px!important}
+ .log{height:280px!important;min-height:34vh!important;font-size:16px!important}
+}
 </style></head><body><main><section class="card"><h2>📋 ${title}</h2><div class="muted">Nhật ký cập nhật tự động. Không đóng trang trong khi modem đang cấu hình.</div>
   <div id="status" class="status">Đang kết nối...</div><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs">Đang chờ nhật ký...</pre></section></main>
   <script>
