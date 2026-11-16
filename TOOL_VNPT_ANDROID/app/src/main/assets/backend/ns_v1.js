@@ -47,11 +47,34 @@ function crc32(str) {
   return ((c ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, "0");
 }
 
+function apiSafeText(value, limit=8000) {
+  let text = String(value == null ? "" : value);
+  text = text
+    .replace(/("[^"\\]*(?:password|passwd|pass|psw|otp|token|csrf|secret|sessionkey|authorization|cookie)[^"\\]*"\s*:\s*)"[^\"]*"/ig, '$1"[REDACTED]"')
+    .replace(/((?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secret|secretcode|sessionkey|authorization|cookie)=)[^&\s]*/ig, "$1[REDACTED]")
+    .replace(/(\b(?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secretcode|sessionkey|authorization|cookie)\b\s*[:=]\s*)["']?[^"'&,\s}]+["']?/ig, "$1[REDACTED]");
+  if (text.length > limit) text = text.slice(0, limit) + `… [đã rút gọn; tổng ${String(value).length} ký tự]`;
+  return text || "(trống)";
+}
+function apiSafeHeaders(headers={}) {
+  const safe = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    safe[key] = /authorization|cookie|token|csrf|secret|password|set-cookie/i.test(key) ? "[REDACTED]" : value;
+  }
+  return JSON.stringify(safe);
+}
+function apiSafeUrl(url) {
+  const safe = new URL(url);
+  for (const key of [...safe.searchParams.keys()]) if (/token|csrf|password|passwd|pass|psw|otp|secret|auth|session|cookie/i.test(key)) safe.searchParams.set(key, "[REDACTED]");
+  return safe.pathname + safe.search;
+}
+
 function httpsRequest(method, urlString, headers={}, body="") {
   return new Promise((resolve, reject) => {
     const started=Date.now(), u = new URL(urlString);
     const rawLine=m=>{const t=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n${m}`;rawLogs.push(t);if(rawLogs.length>250)rawLogs=rawLogs.slice(-250);};
-    rawLine(`[API>] ${method} ${u.pathname}${u.search} body=${body?Buffer.byteLength(body)+" byte (đã ẩn)":"(trống)"}`);
+    const apiUrl = apiSafeUrl(urlString);
+    rawLine(`[API>] ${method} ${apiUrl}; headers=${apiSafeHeaders({ ...headers, ...(body ? {"Content-Length": Buffer.byteLength(body)} : {}) })}; body(${Buffer.byteLength(body || "")} byte)=${apiSafeText(body)}`);
     const req = https.request({
       hostname: u.hostname,
       port: u.port || 443,
@@ -63,14 +86,14 @@ function httpsRequest(method, urlString, headers={}, body="") {
     }, res => {
       const chunks = [];
       res.on("data", c => chunks.push(c));
-      res.on("end", () => { const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${u.pathname}${u.search} => ${res.statusCode}; response=${Buffer.byteLength(text)} byte; ${Date.now()-started} ms`); resolve({
+      res.on("end", () => { const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${apiUrl} => ${res.statusCode}; headers=${apiSafeHeaders(res.headers)}; response(${Buffer.byteLength(text)} byte)=${apiSafeText(text)}`); resolve({
         status: res.statusCode,
         headers: res.headers,
         text
       }); });
     });
     req.on("timeout", () => req.destroy(new Error("TIMEOUT")));
-    req.on("error", e=>{rawLine(`[API!] ${method} ${u.pathname}${u.search}: ${e.message}`);reject(e);});
+    req.on("error", e=>{rawLine(`[API!] ${method} ${apiUrl}: ${e.message}`);reject(e);});
     if (body) req.write(body);
     req.end();
   });

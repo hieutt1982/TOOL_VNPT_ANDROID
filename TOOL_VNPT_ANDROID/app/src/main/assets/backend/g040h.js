@@ -20,8 +20,27 @@ let cookies = {};
 const agent = new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 2 });
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function apiSafeText(value, limit=8000) {
+  let text = String(value == null ? "" : value);
+  text = text
+    .replace(/("[^"\\]*(?:password|passwd|pass|psw|otp|token|csrf|secret|sessionkey|authorization|cookie)[^"\\]*"\s*:\s*)"[^\"]*"/ig, '$1"[REDACTED]"')
+    .replace(/((?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secret|secretcode|sessionkey|authorization|cookie)=)[^&\s]*/ig, "$1[REDACTED]")
+    .replace(/(\b(?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secretcode|sessionkey|authorization|cookie)\b\s*[:=]\s*)["']?[^"'&,\s}]+["']?/ig, "$1[REDACTED]");
+  if (text.length > limit) text = text.slice(0, limit) + `… [đã rút gọn; tổng ${String(value).length} ký tự]`;
+  return text || "(trống)";
+}
+function apiSafeHeaders(headers={}) {
+  const safe = {};
+  for (const [key, value] of Object.entries(headers || {})) safe[key] = /authorization|cookie|token|csrf|secret|password|set-cookie/i.test(key) ? "[REDACTED]" : value;
+  return JSON.stringify(safe);
+}
+function apiSafeUrl(url) {
+  const safe = new URL(url);
+  for (const key of [...safe.searchParams.keys()]) if (/token|csrf|password|passwd|pass|psw|otp|secret|auth|session|cookie/i.test(key)) safe.searchParams.set(key, "[REDACTED]");
+  return safe.href;
+}
 function log(message) {
-  const safe=String(message).replace(/(password|passwd|token|sessionkey|cookie|secret)(\s*[=:]\s*)[^,; ]+/ig,"$1$2[REDACTED]").replace(/\[HTTP<\] Body đầu:.*$/i,"[HTTP<] Body đầu: [đã ẩn dữ liệu phản hồi]");
+  const safe=apiSafeText(message, 12000);
   const line=`[${new Date().toLocaleTimeString("vi-VN", {hour12:false})}]\n${safe}`; rawLogs.push(line); if(rawLogs.length>MAX_LOGS) rawLogs.shift();
   console.log(String(message));
 }
@@ -90,13 +109,12 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
     };
     const ck = cookieHeader();
     if (ck) headers.Cookie = ck;
-    const cookieNames = Object.keys(cookies);
-    log(`[HTTP>] ${method} ${url.href}`);
-    log(`[HTTP>] Referer=${headers.Referer || "(trống)"}; Cookie=${cookieNames.join(",") || "(trống)"}; Body=${body ? `${Buffer.byteLength(body)} byte` : "(trống)"}`);
+    const apiUrl = apiSafeUrl(url.href);
     if (body) {
       headers["Content-Type"] = "application/x-www-form-urlencoded";
       headers["Content-Length"] = Buffer.byteLength(body);
     }
+    log(`[HTTP>] ${method} ${apiUrl}; headers=${apiSafeHeaders(headers)}; body(${Buffer.byteLength(body || "")} byte)=${apiSafeText(body)}`);
     const req = https.request({
       hostname: url.hostname,
       port: url.port || 443,
@@ -140,11 +158,7 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
           responseInfo = { status, headers };
           parseCookieHeaders(headers);
           rememberJavascriptAuth(text);
-          const setCookie = headers["set-cookie"] || [];
-          const setCookieList = Array.isArray(setCookie) ? setCookie : [setCookie];
-          const setCookieNames = setCookieList.map(v => String(v).split("=")[0].trim()).join(",") || "(không có)";
-          log(`[HTTP<] ${method} ${path} => ${status}; location=${headers.location || "(không có)"}; Set-Cookie=${setCookieNames}; body=${text.length} ký tự`);
-          if (status >= 400) log(`[HTTP<] Body đầu: ${text.slice(0, 220).replace(/[\r\n\t]+/g, " ")}`);
+          log(`[HTTP<] ${method} ${apiUrl} => ${status}; headers=${apiSafeHeaders(headers)}; response(${Buffer.byteLength(text)} byte)=${apiSafeText(text)}`);
           finishResolve({ status, headers, text });
         } catch (error) {
           log(`[HTTP!] Lỗi xử lý phản hồi ${method} ${path}: ${error && error.stack || error}`);
@@ -154,6 +168,7 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
       res.on("aborted", () => {
         const text = Buffer.concat(responseChunks).toString("utf8");
         if (responseInfo && responseInfo.status < 400) {
+          log(`[HTTP<] ${method} ${apiUrl} => ${responseInfo.status} (phản hồi bị ngắt); headers=${apiSafeHeaders(responseInfo.headers)}; response(${Buffer.byteLength(text)} byte)=${apiSafeText(text)}`);
           log(`[HTTP!] ${method} ${path}: modem đóng luồng sau khi trả HTTP ${responseInfo.status}; tiếp tục với phần phản hồi đã nhận (${text.length} ký tự)`);
           parseCookieHeaders(responseInfo.headers);
           rememberJavascriptAuth(text);
@@ -167,6 +182,7 @@ function modemRequest(method, path, body = "", extraHeaders = {}) {
     req.on("error", err => {
       if (responseSeen && responseInfo && responseInfo.status < 400) {
         const text = Buffer.concat(responseChunks).toString("utf8");
+        log(`[HTTP<] ${method} ${apiUrl} => ${responseInfo.status} (socket đóng); headers=${apiSafeHeaders(responseInfo.headers)}; response(${Buffer.byteLength(text)} byte)=${apiSafeText(text)}`);
         log(`[HTTP!] Socket bị ngắt sau khi modem đã trả HTTP ${responseInfo.status} cho ${method} ${path}: ${err.message}`);
         parseCookieHeaders(responseInfo.headers);
         rememberJavascriptAuth(text);
