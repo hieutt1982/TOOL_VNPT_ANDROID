@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#064b9a">
+<script src="onelink/native-fetch.js"></script>
 <title>VNPT TOOL - Android</title>
 <style>
 :root{font-family:Arial,Helvetica,sans-serif;color:#092b66;background:#eaf5ff;font-synthesis:none}
@@ -51,9 +52,39 @@ main{width:min(100%,1000px);margin:0 auto;padding:30px 20px 12px}
  .actions{gap:10px;margin:36px 2px 28px}.action{min-height:112px;border-radius:22px;padding:10px 5px;gap:8px}.action svg{width:43px;height:43px}.footer{min-height:95px}.footer-brand img{width:120px;height:46px}
 }
 @media(max-width:390px){.hero h1{font-size:23px}.product{grid-template-columns:78px minmax(0,1fr) 18px;gap:11px;padding-right:10px}.product-copy h2{font-size:18px}.product-copy p{font-size:14px}.actions{gap:7px}.action{font-size:13px;min-height:95px}.action svg{width:36px;height:36px}}
+
+.hidden{display:none!important}
+.auth-gate{min-height:100dvh;display:grid;place-items:center;padding:calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));background:linear-gradient(145deg,#073775,#0875cf 68%,#27b5ec)}
+.auth-panel{width:min(100%,520px);padding:24px;border:1px solid #ffffff75;border-radius:22px;background:#f8fbff;box-shadow:0 16px 42px #00285355;color:#092b66}
+.auth-title{margin:0 0 5px;font-size:25px;font-weight:800}.auth-caption{margin:0 0 20px;color:#55708f;font-size:14px}
+.auth-panel label{display:block;margin:12px 0 5px;font-size:14px;font-weight:700}
+.auth-panel input{width:100%;height:46px;padding:9px 12px;border:1px solid #9bb4d1;border-radius:10px;background:#fff;color:#14243b;font:16px Arial,sans-serif}
+.auth-panel input:focus{outline:2px solid #2682e8;border-color:#2682e8}
+.auth-panel button{width:100%;min-height:46px;margin-top:14px;border:0;border-radius:10px;background:#0873e5;color:#fff;font:700 16px Arial,sans-serif}
+.auth-status{margin-top:12px;padding:10px 12px;border-radius:9px;background:#eaf3ff;color:#123a66;font-size:13px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.auth-error{background:#fff0f0;color:#9a2020}.auth-success{background:#eaf8ef;color:#166534}
+@media(max-width:390px){.auth-panel{padding:18px;border-radius:17px}.auth-title{font-size:22px}}
 </style>
 </head>
 <body>
+<section id="authGate" class="auth-gate">
+  <div class="auth-panel">
+    <h1 class="auth-title">Đăng nhập OneLink</h1>
+    <p class="auth-caption">Đăng nhập và xác thực OTP để mở VNPT TOOL.</p>
+    <label for="authUsername">Username</label>
+    <input id="authUsername" autocomplete="username" placeholder="Nhập username">
+    <label for="authPassword">Password</label>
+    <input id="authPassword" type="text" autocomplete="current-password" placeholder="Nhập password">
+    <button id="authLoginBtn" type="button" onclick="loginStep1()">Đăng nhập / Gửi OTP</button>
+    <div id="authOtpBox" class="hidden">
+      <label for="authOtp">OTP</label>
+      <input id="authOtp" inputmode="numeric" autocomplete="one-time-code" placeholder="Nhập OTP">
+      <button id="authOtpBtn" type="button" onclick="loginStep2()">Xác thực OTP</button>
+    </div>
+    <div id="authStatus" class="auth-status" aria-live="polite">Chưa đăng nhập.</div>
+  </div>
+</section>
+<div id="appShell" class="hidden">
 <header class="hero">
   <div class="hero-row">
     <span class="brand-logo symbol"><img src="vnpt-symbol.png" alt="Biểu tượng VNPT"></span>
@@ -78,12 +109,32 @@ main{width:min(100%,1000px);margin:0 auto;padding:30px 20px 12px}
 </main>
 <footer class="footer"><div class="footer-brand"><img src="vnpt-logo.png" alt="VNPT"></div><svg class="city" viewBox="0 0 360 100" fill="currentColor" aria-hidden="true"><path d="M0 100V57h20V35h8v22h10V20h18v80h10V48h12V29h7v19h13V13h26v87h10V42h12V24h8v18h13V8h30v92h9V37h11V17h8v20h13V30h26v70h10V51h14V32h8v19h20v49z"/></svg></footer>
 <div class="dialog-backdrop" id="dialogBackdrop" onclick="if(event.target===this)closeDialog()"><section class="dialog" role="dialog" aria-modal="true"><h2 id="dialogTitle"></h2><div id="dialogBody"></div><div class="dialog-actions" id="dialogActions"></div></section></div>
+</div>
 <script src="bridge.js"></script>
 <script>
+
+const ONE_API_1='/api/auth/step1', ONE_API_2='/api/auth/step2';
+const ONE_DEVICE_ID='54524c30658290a7', ONE_MOBILE_ID='', ONE_TOKEN_KEY='onebss_token';
+let pendingOneLogin=null, oneLoginBusy=false;
+function setAuthStatus(message,kind=''){const el=document.getElementById('authStatus');el.textContent=message;el.className='auth-status'+(kind?' auth-'+kind:'')}
+function readOneToken(){try{const raw=AndroidBridge.getOneLinkToken();if(raw){const value=JSON.parse(raw);localStorage.setItem(ONE_TOKEN_KEY,raw);return value}}catch(e){}try{return JSON.parse(localStorage.getItem(ONE_TOKEN_KEY)||'null')}catch(e){return null}}
+function writeOneToken(value){const raw=JSON.stringify(value);localStorage.setItem(ONE_TOKEN_KEY,raw);try{AndroidBridge.saveOneLinkToken(raw)}catch(e){}}
+function clearOneToken(){localStorage.removeItem(ONE_TOKEN_KEY);try{AndroidBridge.clearOneLinkToken()}catch(e){}}
+function validOneToken(){const token=readOneToken();if(!token||!token.access_token)return null;if(token.expires_at&&Date.now()/1000>=Number(token.expires_at)){clearOneToken();return null}return token}
+function showAppShell(){document.getElementById('authGate').classList.add('hidden');document.getElementById('appShell').classList.remove('hidden')}
+function showAuthGate(){document.getElementById('appShell').classList.add('hidden');document.getElementById('authGate').classList.remove('hidden')}
+function updateAppGate(){if(validOneToken())showAppShell();else showAuthGate()}
+async function postOneJson(url,data){const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'Dart/3.10 (dart:io)'},body:JSON.stringify(data)});const text=await response.text();let body;try{body=JSON.parse(text)}catch(e){body=text}if(!response.ok){const error=new Error('HTTP '+response.status);error.body=body;throw error}return body}
+async function postOneForm(url,data){const form=new URLSearchParams();Object.entries(data).forEach(([key,value])=>form.append(key,value==null?'':String(value)));const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Dart/3.10 (dart:io)'},body:form.toString()});const text=await response.text();let body;try{body=JSON.parse(text)}catch(e){body=text}if(!response.ok){const error=new Error('HTTP '+response.status);error.body=body;throw error}return body}
+async function loginStep1(){if(oneLoginBusy)return;pendingOneLogin=null;document.getElementById('authOtpBox').classList.add('hidden');const username=document.getElementById('authUsername').value.trim(),password=document.getElementById('authPassword').value;if(!username||!password){setAuthStatus('Vui lòng nhập username và password.','error');return}oneLoginBusy=true;const button=document.getElementById('authLoginBtn');button.disabled=true;setAuthStatus('Bước 1/2: đang xác thực tài khoản...');try{const response=await postOneJson(ONE_API_1,{username,password,os_type:'1',mobile_id:ONE_MOBILE_ID,device_id:ONE_DEVICE_ID});const data=response&&response.data||{},secretCode=data.secretCode;if(!secretCode){setAuthStatus('Không lấy được secretCode. Phản hồi: '+JSON.stringify(response),'error');return}pendingOneLogin={username,secretCode,ten_nv:data.ten_nv||null,sdt:data.sdt||null};document.getElementById('authOtpBox').classList.remove('hidden');setAuthStatus('Bước 1 thành công. OTP đã được gửi. Nhập OTP để tiếp tục.'+(data.sdt?'\nSố điện thoại: '+data.sdt:''),'success')}catch(error){setAuthStatus('Lỗi bước 1: '+(error.body?JSON.stringify(error.body):error.message),'error')}finally{oneLoginBusy=false;button.disabled=false}}
+async function loginStep2(){if(oneLoginBusy)return;if(!pendingOneLogin){setAuthStatus('Chưa hoàn tất bước đăng nhập đầu tiên.','error');return}const otp=document.getElementById('authOtp').value.trim();if(!otp){setAuthStatus('Vui lòng nhập OTP.','error');return}oneLoginBusy=true;const button=document.getElementById('authOtpBtn');button.disabled=true;setAuthStatus('Bước 2/2: đang xác thực OTP...');const pending=pendingOneLogin;try{const response=await postOneForm(ONE_API_2,{grant_type:'password',client_id:'clientapp',client_secret:'password',secretCode:pending.secretCode,otp});if(!response||!response.access_token){setAuthStatus('OTP chưa được chấp nhận. Phản hồi: '+JSON.stringify(response),'error');return}const expires=Number(response.expires_in||0);const token={username:pending.username,ten_nv:pending.ten_nv,sdt:pending.sdt,os_type:'1',device_id:ONE_DEVICE_ID,mobile_id:ONE_MOBILE_ID,secretCode:pending.secretCode,access_token:response.access_token,refresh_token:response.refresh_token||null,token_type:response.token_type||null,expires_in:response.expires_in||null,expires_at:expires?Date.now()/1000+expires:null,scope:response.scope||null};writeOneToken(token);pendingOneLogin=null;fetch('/api/log-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:'MODEM',username:pending.username})}).catch(()=>{});setAuthStatus('Đăng nhập thành công. Đang mở ứng dụng.','success');showAppShell()}catch(error){setAuthStatus('Lỗi xác thực OTP: '+(error.body?JSON.stringify(error.body):error.message),'error')}finally{oneLoginBusy=false;button.disabled=false}}
+function logoutApp(){clearOneToken();pendingOneLogin=null;document.getElementById('authOtpBox').classList.add('hidden');document.getElementById('authOtp').value='';document.getElementById('authPassword').value='';setAuthStatus('Đã đăng xuất. Vui lòng đăng nhập lại.');showAuthGate()}
+window.addEventListener('DOMContentLoaded',updateAppGate);
+
 const modal=document.getElementById('dialogBackdrop'),titleEl=document.getElementById('dialogTitle'),bodyEl=document.getElementById('dialogBody'),actionsEl=document.getElementById('dialogActions');
 function openDialog(title,body,actions=[]){titleEl.textContent=title;bodyEl.innerHTML='';if(typeof body==='string'){const p=document.createElement('p');p.textContent=body;bodyEl.appendChild(p)}else bodyEl.appendChild(body);actionsEl.innerHTML='';actions.forEach(([text,fn])=>{const b=document.createElement('button');b.textContent=text;b.onclick=fn;actionsEl.appendChild(b)});const close=document.createElement('button');close.textContent='Đóng';close.onclick=closeDialog;actionsEl.appendChild(close);modal.classList.add('open')}
 function closeDialog(){modal.classList.remove('open')}
-function showInfo(){let version='Không rõ';try{version=AndroidBridge.version()}catch(e){}openDialog('Thông tin ứng dụng','VNPT TOOL - Android\nPhiên bản: '+version)}
+function showInfo(){let version='Không rõ';try{version=AndroidBridge.version()}catch(e){}const actions=validOneToken()?[['Đăng xuất',logoutApp]]:[];openDialog('Thông tin ứng dụng','VNPT TOOL - Android\nPhiên bản: '+version,actions)}
 function showLogs(){let value='Chưa có nhật ký.';try{value=AndroidBridge.diagnosticLog()}catch(e){value='Không đọc được nhật ký: '+e.message}const pre=document.createElement('pre');pre.textContent=value;openDialog('Nhật ký ứng dụng',pre,[['Sao chép',async()=>{try{await navigator.clipboard.writeText(pre.textContent)}catch(e){pre.focus();document.execCommand('copy')}}],['Xóa',()=>{try{AndroidBridge.clearDiagnosticLog();pre.textContent=AndroidBridge.diagnosticLog()}catch(e){pre.textContent='Không xóa được nhật ký: '+e.message}}]])}
 function checkUpdate(){openDialog('Cập nhật','Chưa có dịch vụ kiểm tra cập nhật trực tuyến được nối trong ứng dụng này.')}
 function exitApp(){if(history.length>1)history.back();else openDialog('Thoát ứng dụng','Dùng nút Quay lại của Android để thoát.')}
