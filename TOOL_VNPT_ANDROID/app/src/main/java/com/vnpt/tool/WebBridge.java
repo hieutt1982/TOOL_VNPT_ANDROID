@@ -108,6 +108,24 @@ public final class WebBridge {
         });
     }
 
+    @JavascriptInterface
+    public void saveOneLinkToken(String tokenJson) {
+        webView.getContext().getSharedPreferences("onelink_auth", Context.MODE_PRIVATE)
+                .edit().putString("token", tokenJson == null ? "" : tokenJson).apply();
+    }
+
+    @JavascriptInterface
+    public String getOneLinkToken() {
+        return webView.getContext().getSharedPreferences("onelink_auth", Context.MODE_PRIVATE)
+                .getString("token", "");
+    }
+
+    @JavascriptInterface
+    public void clearOneLinkToken() {
+        webView.getContext().getSharedPreferences("onelink_auth", Context.MODE_PRIVATE)
+                .edit().remove("token").apply();
+    }
+
     /** Native implementation of the OneLink routes previously served by Node.js. */
     @JavascriptInterface
     public void requestOneLink(String id, String method, String path,
