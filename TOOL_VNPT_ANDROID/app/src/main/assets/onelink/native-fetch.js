@@ -2,10 +2,11 @@
 (() => {
   const pending = new Map();
   let seq = 0;
-  window.__nativeHttpDone = (id, raw) => {
+  window.__oneLinkHttpDone = (id, raw) => {
     const done = pending.get(String(id));
     if (!done) return;
     pending.delete(String(id));
+    clearTimeout(done.timer);
     let result;
     try { result = JSON.parse(raw); } catch (e) { done.reject(e); return; }
     if (!result.ok) { done.reject(new Error(result.error || 'Lỗi gọi API')); return; }
@@ -33,11 +34,14 @@
     else if (sourceHeaders && typeof sourceHeaders === 'object') Object.assign(headers, sourceHeaders);
     const body = init.body == null ? '' : String(init.body);
     return new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (pending.delete(id)) reject(new Error('OneLink request quá thời gian chờ'));
+      }, 50000);
+      pending.set(id, { resolve, reject, timer });
       try {
         if (!window.AndroidBridge || !AndroidBridge.requestOneLink) throw new Error('Không tìm thấy Java Bridge');
         AndroidBridge.requestOneLink(id, method, url.pathname + url.search, JSON.stringify(headers), body);
-      } catch (e) { pending.delete(id); reject(e); }
+      } catch (e) { clearTimeout(timer); pending.delete(id); reject(e); }
     });
   };
 })();
