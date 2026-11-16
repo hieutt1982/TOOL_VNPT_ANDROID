@@ -15,9 +15,9 @@
   const menuId=10299;
   const appSecret='eyJkZXZpY2VfaWQiOiI1NDUyNGMzMDY1ODI5MGE3IiwiZGV2aWNlX2lwIjoiMTkyLjE2OC4xLjIzIiwiZGV2aWNlX25hbWUiOiJPWEYtQU4wMCAtIEhvbm9yIiwibWFjX2FkZHJlc3MiOiIwMDpkYjpkODpmZDpmZDo0MiIsIm1vYmlsZV9pZCI6ImYyRmt2NnQ1UThxS1lXRmFvMkdSVXY6QVBBOTFiSElqZTByYzJKSXJDZ1FiUGpZUk1ibHNGWGppd0JublVDRThzN3gxTTdxbURod09Nc05KeTBpd2dsdm5YRjJ4N2plUC14V2Y5bElocC1kQnRURVA2azNqbEgtSmE5RXpOb2JNdTdyekNRRW1yWHQ1WGsiLCJhcHBfaWQiOiIxIiwiYXBwX3ZlcnNpb24iOiIxLjUuNDEuMjI2Iiwib3NfdmVyc2lvbiI6IkFuZHJvaWQgOSAtIChTREsgMjgpIn0=';
   function sendResult(result){try{window.parent.postMessage(Object.assign({type:'subscriber-sync-result'},result),'*');}catch(e){}}
-  function request(kind,account,token){
+  function request(kind,lookup,token){
     const id='doki-'+(++sequence);
-    const body=JSON.stringify({kieu:kind,maTb:account,profile:{date:new Date().toISOString(),lyDo:'',newPass:'',speed:'',time:new Date().toLocaleString('vi-VN')},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:menuId});
+    const body=JSON.stringify({kieu:kind,maTb:lookup,profile:{date:new Date().toISOString(),lyDo:'',newPass:'',speed:'',time:new Date().toLocaleString('vi-VN')},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:menuId});
     const headers={'Content-Type':'application/json','Authorization':'Bearer '+token.access_token,'selectedmenuid':String(menuId),'app-secret':appSecret};
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Quá thời gian gọi API doKiem'));},50000);
@@ -55,23 +55,23 @@
     return {wifi2gName:two?two.name:'',wifi2gPassword:two?two.password:'',wifi5gName:name5,wifi5gPassword:five?five.password:'',mirrored};
   }
   async function run(){
-    const account=new URLSearchParams(location.search).get('account')||'';
-    if(!account||account==='ppp_user'){sendResult({ok:false,error:'Nhập ACC thuê bao vào ô Tài khoản PPPoE trước.'});return;}
+    const lookup=new URLSearchParams(location.search).get('lookup')||'';
+    if(!lookup){sendResult({ok:false,error:'Nhập ACC thuê bao vào ô SLID rồi bấm ĐỒNG BỘ.'});return;}
     const token=validToken();
     if(!token){sendResult({ok:false,error:'Phiên đăng nhập VNPT TOOL đã hết hạn hoặc chưa có. Hãy đăng nhập lại.'});return;}
     try{
-      const results=await Promise.allSettled([request(0,account,token),request(3,account,token),request(10,account,token)]);
+      const results=await Promise.allSettled([request(0,lookup,token),request(3,lookup,token),request(10,lookup,token)]);
       const info=results[0].status==='fulfilled'?results[0].value:null;
       const wifiResult=results[1].status==='fulfilled'?results[1].value:null;
       const visa=results[2].status==='fulfilled'?results[2].value:null;
       const success=data=>!!data&&(!data.error||data.error==='BSS-00000000');
-      const fields={slid:'',pppoePassword:'',wifi2gName:'',wifi2gPassword:'',wifi5gName:'',wifi5gPassword:''};
+      const fields={slid:'',pppoeUser:lookup,pppoePassword:'',wifi2gName:'',wifi2gPassword:'',wifi5gName:'',wifi5gPassword:''};
       if(info&&success(info))fields.slid=extractSlid(info.data);
       if(visa&&success(visa))fields.pppoePassword=extractPppoePassword(visa.data);
       let wifi=extractWifi(wifiResult&&success(wifiResult)?wifiResult.data:'');
       for(let retry=1;retry<=2&&(!wifi.wifi2gName||!wifi.wifi5gName);retry++){
         await new Promise(resolve=>setTimeout(resolve,1200));
-        try{const next=await request(3,account,token);if(success(next))wifi=extractWifi(next.data);}catch(e){}
+        try{const next=await request(3,lookup,token);if(success(next))wifi=extractWifi(next.data);}catch(e){}
       }
       fields.wifi2gName=wifi.wifi2gName;fields.wifi2gPassword=wifi.wifi2gPassword;fields.wifi5gName=wifi.wifi5gName;fields.wifi5gPassword=wifi.wifi5gPassword;
       const got=[];if(fields.slid)got.push('SLID');if(fields.pppoePassword)got.push('mật khẩu PPPoE');if(fields.wifi2gName)got.push('Wi-Fi 2.4 GHz');if(fields.wifi5gName)got.push('Wi-Fi 5 GHz');
