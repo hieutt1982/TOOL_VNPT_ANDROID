@@ -98,3 +98,59 @@
     document.open(); document.write(html); document.close();
   };
 })();
+
+
+/* The dedicated hidden OneLink fetch page returns data to the active form. */
+window.syncSubscriberData = function(button) {
+  const byId=ids=>{for(const id of ids){const el=document.getElementById(id);if(el)return el;}return null;};
+  const accountField=byId(['pppoeUser']);
+  const status=byId(['syncStatus','status']);
+  const say=text=>{if(status)status.textContent=text;};
+  const account=accountField?accountField.value.trim():'';
+  if(!account||account==='ppp_user'){say('Nhập ACC thuê bao vào ô Tài khoản PPPoE trước.');return;}
+  if(window.__subscriberSyncFrame){say('Đang lấy dữ liệu thuê bao...');return;}
+  if(button)button.disabled=true;
+  say('Đang lấy dữ liệu thuê bao qua OneLink...');
+  const frame=document.createElement('iframe');
+  frame.title='Đồng bộ dữ liệu thuê bao';
+  frame.setAttribute('aria-hidden','true');
+  frame.style.cssText='position:fixed;width:1px;height:1px;left:-10px;bottom:0;border:0;opacity:0;pointer-events:none';
+  window.__subscriberSyncFrame=frame;
+  window.__subscriberSyncButton=button||null;
+  const url=new URL('lay_du_lieu.html',location.href);
+  url.searchParams.set('account',account);
+  frame.src=url.toString();
+  document.body.appendChild(frame);
+};
+window.addEventListener('message',async function(event){
+  const frame=window.__subscriberSyncFrame;
+  if(!frame||event.source!==frame.contentWindow||!event.data)return;
+  const message=event.data;
+  if(message.type==='doki-http-request'){
+    try{
+      const response=await window.nativeHttps(message.url,{method:message.method||'POST',headers:message.headers||{},body:message.body||''});
+      const text=await response.text();
+      frame.contentWindow.postMessage({type:'doki-http-response',id:message.id,ok:response.ok,status:response.status,text},'*');
+    }catch(error){frame.contentWindow.postMessage({type:'doki-http-response',id:message.id,ok:false,error:error.message||String(error)},'*');}
+    return;
+  }
+  if(message.type!=='subscriber-sync-result')return;
+  const byId=ids=>{for(const id of ids){const el=document.getElementById(id);if(el)return el;}return null;};
+  const fields=message.fields||{};
+  const assign=(ids,value)=>{const el=byId(ids);if(el&&value)el.value=value;};
+  if(message.ok){
+    assign(['slid'],fields.slid);
+    assign(['pppoePassword','pppoePass'],fields.pppoePassword);
+    assign(['wifi2gName','wifi2g'],fields.wifi2gName);
+    assign(['wifi2gPassword','pass2g'],fields.wifi2gPassword);
+    assign(['wifi5gName','wifi5g'],fields.wifi5gName);
+    assign(['wifi5gPassword','pass5g'],fields.wifi5gPassword);
+    const status=byId(['syncStatus','status']);
+    if(status)status.textContent=message.summary||'Đã nhận dữ liệu thuê bao và điền vào form.';
+  }else{
+    const status=byId(['syncStatus','status']);
+    if(status)status.textContent=message.error||'Không lấy được dữ liệu thuê bao.';
+  }
+  if(window.__subscriberSyncFrame){window.__subscriberSyncFrame.remove();window.__subscriberSyncFrame=null;}
+  if(window.__subscriberSyncButton){window.__subscriberSyncButton.disabled=false;window.__subscriberSyncButton=null;}
+});
