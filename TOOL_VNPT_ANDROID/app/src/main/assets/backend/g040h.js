@@ -1801,35 +1801,41 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
   await sleep(1000);
   
+  const wifiJobs = [];
   if (cfg.doWifi5g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
-    try {
-      await timedStep("Wi-Fi 5 GHz", async () => {
-        const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
-        await saveWifiBand(wifi5);
-      });
-      stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
-    } catch (err) {
-      const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
-      warnings.push(warning);
-      stepLog(`⚠️ ${warning}`);
-    }
+    wifiJobs.push((async () => {
+      try {
+        await timedStep("Wi-Fi 5 GHz", async () => {
+          const wifi5 = await prepareWifiBand("5G", "/cgi-bin/home_wireless_5g.asp", WIFI5_TEMPLATE, cfg.wifi5gName, cfg.wifi5gPassword);
+          await saveWifiBand(wifi5);
+        });
+        stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
+      } catch (err) {
+        const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+      }
+    })());
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
-    try {
-      await timedStep("Wi-Fi 2.4 GHz", async () => {
-        const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
-        await saveWifiBand(wifi2);
-      });
-      stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
-    } catch (err) {
-      const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
-      warnings.push(warning);
-      stepLog(`⚠️ ${warning}`);
-    }
+    wifiJobs.push((async () => {
+      try {
+        await timedStep("Wi-Fi 2.4 GHz", async () => {
+          const wifi2 = await prepareWifiBand("2.4G", "/cgi-bin/home_wireless.asp", WIFI2_TEMPLATE, cfg.wifi2gName, cfg.wifi2gPassword);
+          await saveWifiBand(wifi2);
+        });
+        stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
+      } catch (err) {
+        const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+      }
+    })());
   } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
+  await Promise.all(wifiJobs);
 
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: cfg.ip, warnings };

@@ -236,26 +236,31 @@ async function configure(o){
     }else stepLog("3/4 PPPoE: bỏ qua");
     await sleep(1000);
 
+    const wifiJobs=[];
     if(doWifi5g){
       stepLog("4/4 Wi-Fi 5 GHz: POST wirelesscfg.json");
-      try{
-        await timedStep("Wi-Fi 5 GHz",()=>setWifi(o.ip,1,o.wifi5g,o.pass5g));
-        stepLog("4/4 Wi-Fi 5 GHz: xong");
-      }catch(e){
-        const warning=`Wi-Fi 5 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
-      }
+      wifiJobs.push((async()=>{
+        try{
+          await timedStep("Wi-Fi 5 GHz",()=>setWifi(o.ip,1,o.wifi5g,o.pass5g));
+          stepLog("4/4 Wi-Fi 5 GHz: xong");
+        }catch(e){
+          const warning=`Wi-Fi 5 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
+        }
+      })());
     }else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
     if(doWifi2g){
       stepLog("4/4 Wi-Fi 2.4 GHz: POST wirelesscfg.json");
-      try{
-        await timedStep("Wi-Fi 2.4 GHz",()=>setWifi(o.ip,0,o.wifi2g,o.pass2g));
-        stepLog("4/4 Wi-Fi 2.4 GHz: xong");
-      }catch(e){
-        const warning=`Wi-Fi 2.4 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
-      }
+      wifiJobs.push((async()=>{
+        try{
+          await timedStep("Wi-Fi 2.4 GHz",()=>setWifi(o.ip,0,o.wifi2g,o.pass2g));
+          stepLog("4/4 Wi-Fi 2.4 GHz: xong");
+        }catch(e){
+          const warning=`Wi-Fi 2.4 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
+        }
+      })());
     }else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
-
+    await Promise.all(wifiJobs);
 
     stepLog("Hoàn tất cấu hình");
     lastResult={ok:true,warnings};
