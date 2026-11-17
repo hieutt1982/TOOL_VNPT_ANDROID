@@ -839,43 +839,63 @@ async function configureModem(cfg) {
   } else stepLog("3/4 PPPoE: bỏ qua");
   await sleep(1000);
 
-  const wifiJobs = [];
+  const wifiCsrf = { wifi5: null, wifi2: null };
+  const csrfJobs = [];
   if (cfg.doWifi5g || cfg.doWifi) {
-    stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
-    wifiJobs.push((async () => {
+    stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF");
+    csrfJobs.push((async () => {
       try {
-        await timedStep("Wi-Fi 5 GHz", async () => {
-          const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
-          if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
-          await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5);
-        });
+        wifiCsrf.wifi5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
+        if (!wifiCsrf.wifi5) throw new Error("Lỗi lấy token Wi-Fi 5G");
+      } catch (err) {
+        const warning = `Wi-Fi 5 GHz: không lấy được CSRF (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+      }
+    })());
+  }
+  if (cfg.doWifi2g || cfg.doWifi) {
+    stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF");
+    csrfJobs.push((async () => {
+      try {
+        wifiCsrf.wifi2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+        if (!wifiCsrf.wifi2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
+      } catch (err) {
+        const warning = `Wi-Fi 2.4 GHz: không lấy được CSRF (${err.message || err})`;
+        warnings.push(warning);
+        stepLog(`⚠️ ${warning}`);
+      }
+    })());
+  }
+  await Promise.all(csrfJobs);
+
+  if (cfg.doWifi5g || cfg.doWifi) {
+    if (wifiCsrf.wifi5) {
+      stepLog("4/4 Wi-Fi 5 GHz: POST cấu hình");
+      try {
+        await timedStep("Wi-Fi 5 GHz", () => config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, wifiCsrf.wifi5));
         stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
       } catch (err) {
         const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
         warnings.push(warning);
         stepLog(`⚠️ ${warning}`);
       }
-    })());
+    }
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
-    stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
-    wifiJobs.push((async () => {
+    if (wifiCsrf.wifi2) {
+      stepLog("4/4 Wi-Fi 2.4 GHz: POST cấu hình");
       try {
-        await timedStep("Wi-Fi 2.4 GHz", async () => {
-          const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
-          if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
-          await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2);
-        });
+        await timedStep("Wi-Fi 2.4 GHz", () => config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, wifiCsrf.wifi2));
         stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
       } catch (err) {
         const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
         warnings.push(warning);
         stepLog(`⚠️ ${warning}`);
       }
-    })());
+    }
   } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
-  await Promise.all(wifiJobs);
 
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: MODEM_IP, warnings };
