@@ -878,6 +878,8 @@ async function configureModem(cfg) {
 }
 
 async function resetModemToDefault(cfg) {
+  // Chế độ 3 cũng bắt đầu bằng phiên đăng nhập sạch như cấu hình thường.
+  currentToken = null;
   MODEM_IP = clean(cfg.ip, "192.168.1.1");
   USERNAME = clean(cfg.username, "admin");
   PASSWORD = clean(cfg.password);
