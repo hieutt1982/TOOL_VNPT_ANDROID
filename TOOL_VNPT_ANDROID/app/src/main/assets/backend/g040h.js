@@ -27,7 +27,8 @@ function createModemAgent() {
 // Không tái sử dụng socket đó cho lần đăng nhập kế tiếp.
 function resetModemTransport() {
   cookies = {};
-  if (agent) agent.destroy();
+  // Android WebView dùng Agent giả lập (không có destroy); OkHttp quản lý socket native.
+  if (agent && typeof agent.destroy === "function") agent.destroy();
   agent = createModemAgent();
 }
 
