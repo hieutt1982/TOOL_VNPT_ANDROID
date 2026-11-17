@@ -8,7 +8,6 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import okhttp3.Cookie;
 import okhttp3.CookieJar;
-import okhttp3.ConnectionPool;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Protocol;
@@ -77,9 +76,6 @@ public final class ApiClient {
         modem = new OkHttpClient.Builder()
             .sslSocketFactory(ssl.getSocketFactory(), tm)
             .hostnameVerifier((host, session) -> isPrivateModemHost(host))
-            // Modem firmware thường đóng socket sau khi áp dụng cấu hình/reboot.
-            // Không giữ socket idle để lần cấu hình kế tiếp không dùng lại kết nối cũ.
-            .connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
             .connectTimeout(15, TimeUnit.SECONDS).readTimeout(35, TimeUnit.SECONDS)
             .writeTimeout(35, TimeUnit.SECONDS).followRedirects(false)
             .followSslRedirects(false).build();

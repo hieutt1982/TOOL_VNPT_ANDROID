@@ -80,9 +80,6 @@ public final class WebBridge {
                     String name = names.next();
                     requestBuilder.header(name, headers.optString(name, ""));
                 }
-                // Force each modem exchange to finish its TCP/TLS socket. The
-                // modem may reboot or close keep-alive sockets after a POST.
-                if (modem) requestBuilder.header("Connection", "close");
 
                 if ("GET".equals(httpMethod) || "HEAD".equals(httpMethod)) {
                     requestBuilder.method(httpMethod, null);
@@ -189,15 +186,6 @@ public final class WebBridge {
                             .header("Content-Type", "application/json")
                             .header("token-key", MODEM_KEY)
                             .header("token-id", "SDK_TECH");
-                    addPostBody(upstreamRequest, body, headers);
-                } else if ("/api/thicong/baoHong/doKiem".equals(route) && "POST".equals(httpMethod)) {
-                    upstreamRequest = new Request.Builder()
-                            .url(UPSTREAM + "/app-thicong/baoHong/doKiem")
-                            .header("Accept", "application/json")
-                            .header("Content-Type", "application/json")
-                            .header("Authorization", headerValue(headers, "authorization"))
-                            .header("selectedmenuid", headerValueOr(headers, "selectedmenuid", "10299"))
-                            .header("app-secret", headerValue(headers, "app-secret"));
                     addPostBody(upstreamRequest, body, headers);
                 } else if ("/api/thicong/dsVatTuThiCong".equals(route) && "POST".equals(httpMethod)) {
                     String query = incoming.encodedQuery() == null ? "" : "?" + incoming.encodedQuery();
