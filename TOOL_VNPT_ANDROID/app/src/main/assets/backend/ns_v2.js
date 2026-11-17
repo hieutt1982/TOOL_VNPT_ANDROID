@@ -444,13 +444,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
   var resetAutoStarted=false;
   function triggerResetFromMode(){
     if($("mode").value!=="3"){resetAutoStarted=false;return;}
-    if(!val("modemPass")){$("status").textContent="Nhập mật khẩu hiện tại của modem; reset sẽ tự chạy khi bạn rời ô mật khẩu.";$("status").className="status running";window.alert("Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu; reset sẽ tự chạy khi bạn rời ô mật khẩu.");return;}
+    if(!val("modemPass")){$("status").textContent="Nhập mật khẩu hiện tại, sau đó chọn lại chế độ 3 để reset.";$("status").className="status running";window.alert("Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu, sau đó chọn lại chế độ 3 để reset.");$("mode").value="2";updatePasswordLabel();resetAutoStarted=false;return;}
     if(resetAutoStarted)return;
     resetAutoStarted=true;
     $("run").click();
   }
   $("mode").addEventListener("change",function(){updatePasswordLabel();triggerResetFromMode();});
-  $("modemPass").addEventListener("change",triggerResetFromMode);
   updatePasswordLabel();
   $("run").addEventListener("click",async function(){
     var payload={
@@ -464,9 +463,10 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     try{
       if(payload.mode==="3"){
         if(!payload.modemPass)throw new Error("Nhập mật khẩu hiện tại của modem để reset.");
-        if(!window.confirm("Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?")){resetAutoStarted=false;$("status").textContent="Sẵn sàng.";$("status").className="status ok";return;}
+        if(!window.confirm("Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?")){resetAutoStarted=false;$("mode").value="2";updatePasswordLabel();$("status").textContent="Đã hủy reset.";$("status").className="status ok";return;}
         var rr=await fetch('${API_PREFIX}/api/reset-default',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
         var rd=await rr.json();if(!rr.ok||!rd.ok)throw new Error(rd.error||"Không thể bắt đầu reset.");
+        $("mode").value="2";updatePasswordLabel();resetAutoStarted=false;
         await refresh();return;
       }
       var r=await fetch('${API_PREFIX}/api/configure',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -476,7 +476,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     }catch(e){
       $("status").textContent="❌ LỖI: "+e.message;
       $("status").className="status err";
-      if(payload.mode==="3")resetAutoStarted=false;
+      if(payload.mode==="3"){$("mode").value="2";updatePasswordLabel();resetAutoStarted=false;}
     }
   });
   document.querySelectorAll("input[name=logMode]").forEach(function(el){el.addEventListener("change",refresh);});

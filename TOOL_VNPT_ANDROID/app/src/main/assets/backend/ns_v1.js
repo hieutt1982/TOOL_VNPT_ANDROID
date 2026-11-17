@@ -1070,14 +1070,12 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
   var resetAutoStarted=false;
   function triggerResetFromMode(){
     if(val('loginMode')!=='3'){resetAutoStarted=false;return;}
-    if(!val('password')){setStatus('Nhập mật khẩu hiện tại của modem; reset sẽ tự chạy khi bạn rời ô mật khẩu.','running');window.alert('Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu; reset sẽ tự chạy khi bạn rời ô mật khẩu.');return;}
+    if(!val('password')){setStatus('Nhập mật khẩu hiện tại, sau đó chọn lại chế độ 3 để reset.','running');window.alert('Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu, sau đó chọn lại chế độ 3 để reset.');loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;return;}
     if(resetAutoStarted)return;
     resetAutoStarted=true;
     runConfig();
   }
   if(loginModeEl) loginModeEl.addEventListener('change',function(){updatePasswordLabel();triggerResetFromMode();});
-  var resetPasswordEl=byId('password');
-  if(resetPasswordEl) resetPasswordEl.addEventListener('change',triggerResetFromMode);
   updatePasswordLabel();
 
   async function runConfig(){
@@ -1098,10 +1096,11 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
       if(!cfg.ip) throw new Error('Chưa nhập IP modem');
       if(cfg.loginMode==='3'){
         if(!cfg.password) throw new Error('Hãy nhập mật khẩu hiện tại ở chế độ 2 trước khi chọn chức năng 3.');
-        if(!window.confirm('Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?')){resetAutoStarted=false;if(run)run.disabled=false;return;}
+        if(!window.confirm('Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?')){loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;setStatus('Đã hủy reset.','');if(run)run.disabled=false;return;}
         var rr=await fetch('${API_PREFIX}/api/reset-default',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:cfg.ip,username:cfg.username,loginMode:cfg.loginMode,password:cfg.password}),cache:'no-store'});
         var rd=await rr.json();
         if(!rr.ok||!rd.ok) throw new Error(rd.error||('HTTP '+rr.status));
+        loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;
         setStatus('✅ Đã gửi lệnh khôi phục mặc định. Modem sẽ khởi động lại.','running');
         await refresh();
         return;
@@ -1113,7 +1112,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
       await refresh();
     }catch(e){
       setStatus('❌ '+e.message,'err');
-      if(cfg.loginMode==='3') resetAutoStarted=false;
+      if(cfg.loginMode==='3'){loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;}
       if(run) run.disabled=false;
     }
   }
