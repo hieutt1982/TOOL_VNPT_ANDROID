@@ -856,7 +856,6 @@ async function configureModem(cfg) {
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
-    if (cfg.doWifi5g || cfg.doWifi) await sleep(1000);
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
     try {
       await timedStep("Wi-Fi 2.4 GHz", async () => {
@@ -871,6 +870,7 @@ async function configureModem(cfg) {
       stepLog(`⚠️ ${warning}`);
     }
   } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
+
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: MODEM_IP, warnings };
 }

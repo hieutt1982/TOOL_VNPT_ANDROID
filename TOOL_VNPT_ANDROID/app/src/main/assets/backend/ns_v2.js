@@ -247,7 +247,6 @@ async function configure(o){
     }else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
     if(doWifi2g){
-      if(doWifi5g) await sleep(1000);
       stepLog("4/4 Wi-Fi 2.4 GHz: POST wirelesscfg.json");
       try{
         await timedStep("Wi-Fi 2.4 GHz",()=>setWifi(o.ip,0,o.wifi2g,o.pass2g));
@@ -256,6 +255,7 @@ async function configure(o){
         const warning=`Wi-Fi 2.4 GHz không hoàn tất: ${e.message||e}`; warnings.push(warning); stepLog("⚠️",warning);
       }
     }else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
+
 
     stepLog("Hoàn tất cấu hình");
     lastResult={ok:true,warnings};
