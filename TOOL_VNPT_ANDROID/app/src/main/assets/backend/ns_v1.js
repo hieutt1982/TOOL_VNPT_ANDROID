@@ -47,11 +47,34 @@ function crc32(str) {
   return ((c ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, "0");
 }
 
+function apiSafeText(value, limit=8000) {
+  let text = String(value == null ? "" : value);
+  text = text
+    .replace(/("[^"\\]*(?:password|passwd|pass|psw|otp|token|csrf|secret|sessionkey|authorization|cookie)[^"\\]*"\s*:\s*)"[^\"]*"/ig, '$1"[REDACTED]"')
+    .replace(/((?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secret|secretcode|sessionkey|authorization|cookie)=)[^&\s]*/ig, "$1[REDACTED]")
+    .replace(/(\b(?:password|passwd|pass|psw|otp|token|csrf(?:_token)?|access_token|refresh_token|secretcode|sessionkey|authorization|cookie)\b\s*[:=]\s*)["']?[^"'&,\s}]+["']?/ig, "$1[REDACTED]");
+  if (text.length > limit) text = text.slice(0, limit) + `… [đã rút gọn; tổng ${String(value).length} ký tự]`;
+  return text || "(trống)";
+}
+function apiSafeHeaders(headers={}) {
+  const safe = {};
+  for (const [key, value] of Object.entries(headers || {})) {
+    safe[key] = /authorization|cookie|token|csrf|secret|password|set-cookie/i.test(key) ? "[REDACTED]" : value;
+  }
+  return JSON.stringify(safe);
+}
+function apiSafeUrl(url) {
+  const safe = new URL(url);
+  for (const key of [...safe.searchParams.keys()]) if (/token|csrf|password|passwd|pass|psw|otp|secret|auth|session|cookie/i.test(key)) safe.searchParams.set(key, "[REDACTED]");
+  return safe.pathname + safe.search;
+}
+
 function httpsRequest(method, urlString, headers={}, body="") {
   return new Promise((resolve, reject) => {
     const started=Date.now(), u = new URL(urlString);
     const rawLine=m=>{const t=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n${m}`;rawLogs.push(t);if(rawLogs.length>250)rawLogs=rawLogs.slice(-250);};
-    rawLine(`[API>] ${method} ${u.pathname}${u.search} body=${body?Buffer.byteLength(body)+" byte (đã ẩn)":"(trống)"}`);
+    const apiUrl = apiSafeUrl(urlString);
+    rawLine(`[API>] ${method} ${apiUrl}; headers=${apiSafeHeaders({ ...headers, ...(body ? {"Content-Length": Buffer.byteLength(body)} : {}) })}; body(${Buffer.byteLength(body || "")} byte)=${apiSafeText(body)}`);
     const req = https.request({
       hostname: u.hostname,
       port: u.port || 443,
@@ -63,14 +86,14 @@ function httpsRequest(method, urlString, headers={}, body="") {
     }, res => {
       const chunks = [];
       res.on("data", c => chunks.push(c));
-      res.on("end", () => { const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${u.pathname}${u.search} => ${res.statusCode}; response=${Buffer.byteLength(text)} byte; ${Date.now()-started} ms`); resolve({
+      res.on("end", () => { const text=Buffer.concat(chunks).toString("utf8"); rawLine(`[API<] ${method} ${apiUrl} => ${res.statusCode}; headers=${apiSafeHeaders(res.headers)}; response(${Buffer.byteLength(text)} byte)=${apiSafeText(text)}`); resolve({
         status: res.statusCode,
         headers: res.headers,
         text
       }); });
     });
     req.on("timeout", () => req.destroy(new Error("TIMEOUT")));
-    req.on("error", e=>{rawLine(`[API!] ${method} ${u.pathname}${u.search}: ${e.message}`);reject(e);});
+    req.on("error", e=>{rawLine(`[API!] ${method} ${apiUrl}: ${e.message}`);reject(e);});
     if (body) req.write(body);
     req.end();
   });
@@ -743,6 +766,8 @@ function clean(v, fallback = "") {
 }
 
 async function configureModem(cfg) {
+  // Mỗi lần chạy phải bắt đầu bằng token sạch; token trước thuộc phiên modem cũ.
+  currentToken = null;
   const warnings = [];
   MODEM_IP = clean(cfg.ip, "192.168.1.1");
   USERNAME = clean(cfg.username, "admin");
@@ -833,7 +858,6 @@ async function configureModem(cfg) {
   } else stepLog("4/4 Wi-Fi 5 GHz: bỏ qua");
 
   if (cfg.doWifi2g || cfg.doWifi) {
-    if (cfg.doWifi5g || cfg.doWifi) await sleep(1000);
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
     try {
       await timedStep("Wi-Fi 2.4 GHz", async () => {
@@ -848,8 +872,34 @@ async function configureModem(cfg) {
       stepLog(`⚠️ ${warning}`);
     }
   } else stepLog("4/4 Wi-Fi 2.4 GHz: bỏ qua");
+
   stepLog("Hoàn tất cấu hình");
   return { ok: true, ip: MODEM_IP, warnings };
+}
+
+async function resetModemToDefault(cfg) {
+  // Chế độ 3 cũng bắt đầu bằng phiên đăng nhập sạch như cấu hình thường.
+  currentToken = null;
+  MODEM_IP = clean(cfg.ip, "192.168.1.1");
+  USERNAME = clean(cfg.username, "admin");
+  PASSWORD = clean(cfg.password);
+  if (net.isIP(MODEM_IP) !== 4) throw new Error("IP modem phải là địa chỉ IPv4 hợp lệ.");
+  if (!PASSWORD) throw new Error("Chưa nhập mật khẩu hiện tại của modem.");
+  stepLog("Bắt đầu khôi phục cấu hình mặc định NS V1");
+  const token = await timedStep("Đăng nhập modem bằng mật khẩu hiện tại", async () => {
+    const value = await login_and_get_etoken(USERNAME, PASSWORD);
+    if (!value) throw new Error("Đăng nhập thất bại. Kiểm tra mật khẩu hiện tại.");
+    return value;
+  });
+  const path = "/cgi-bin/mag-reset.asp";
+  const csrf = await get_csrf_token_from_page(token, `https://${MODEM_IP}${path}`);
+  if (!csrf) throw new Error("Không lấy được CSRF token trang reset NS V1.");
+  stepLog("Đã lấy CSRF trang reset; gửi lệnh khôi phục mặc định");
+  await postModemForm(path, {
+    testFlag: "0", restoreFlag: "2", rebootFlag: "1", login_init: "0", CsrfToken: csrf
+  }, token);
+  stepLog("Modem đã nhận lệnh reset mặc định (HTTP phản hồi thành công); modem sẽ khởi động lại.");
+  return { ok: true, reset: true, ip: MODEM_IP };
 }
 
 const API_PREFIX = process.env.NS_EMBED ? '/nsv1' : '';
@@ -967,7 +1017,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
 </style>
 </head>
 <body>
-<div class="wrap"><header class="appbar"><button class="back" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">‹</button><span class="router"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M8 8h32a5 5 0 0 1 5 5v5H3v-5a5 5 0 0 1 5-5Zm-5 14h42v10a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V22Zm9 7h5m14 0h5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 8V4m18 4V4" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>CẤU HÌNH MODEM</strong><button class="menu-home" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">⋮</button></header><section class="card sync-card"><div class="card-head"><h2><span class="head-icon">⇄</span>Lấy thông tin thuê bao</h2></div><div class="card-body"><div class="sync-lookup"><div class="field"><label for="subscriberAcc">ACC thuê bao</label><input id="subscriberAcc" type="text" placeholder="Nhập ACC thuê bao" autocomplete="off"></div><button type="button" class="sync-fetch" onclick="window.syncSubscriberData(this)">Lấy thông tin</button></div><div class="sync-note" id="syncStatus">Nhập ACC rồi chọn Lấy thông tin để điền dữ liệu vào form.</div></div></section><form id="configForm"><section class="card"><div class="card-head"><h2><span class="head-icon">▣</span>1. ĐĂNG NHẬP MODEM</h2></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>IP Modem</label><input id="ip" value="192.168.1.1" placeholder="192.168.1.1"></div><div class="field"><label><span class="ico">👤</span>Tài khoản</label><input id="username" value="admin"></div><div class="field full"><label><span class="ico">⚙</span>Chế độ đăng nhập</label><select id="loginMode"><option value="1">1 - Modem vừa reset / admin-admin</option><option value="2">2 - Modem đã đổi mật khẩu</option></select></div><div class="field full"><label id="passwordLabel"><span class="ico">🔑</span>Mật khẩu mới (nếu cần)</label><div class="field-wrap"><input id="password" type="text" placeholder="Nhập mật khẩu mới cho modem"></div></div></div></div></section><section class="card"><div class="card-head"><h2><span class="head-icon">♧</span>2. SLID GPON</h2><span class="enable-badge" id="badge-doSlid">Enable</span></div><div class="card-body"><div class="field"><label>SLID GPON</label><input id="slid" value="A00012345"></div></div></section><section class="card pppoe-card"><div class="card-head"><h2><span class="head-icon">◎</span>3. WAN - PPPoE</h2><span class="enable-badge" id="badge-doPppoe">Enable</span></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div><div class="field"><label><span class="ico">♧</span>VLAN WAN</label><input id="vlan" value="11"></div><div class="field full"><label><span class="ico">🔑</span>Mật khẩu PPPoE</label><div class="field-wrap"><input id="pppoePassword" type="text" value="abcd1234"></div></div></div></div></section><div class="wifi-grid"><section class="card wifi-card band24"><div class="card-head"><h2><span class="head-icon">◉</span>4. WiFi 2.4 GHz</h2><span class="enable-badge" id="badge-doWifi2g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi2gName" type="text" value="WiFi 2.4G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi2gPassword" type="text" value="1234567890"></div></div></div></section><section class="card wifi-card band5"><div class="card-head"><h2><span class="head-icon">◉</span>5. WiFi 5 GHz</h2><span class="enable-badge" id="badge-doWifi5g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi5gName" type="text" value="WiFi 5G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi5gPassword" type="text" value="1234567890"></div></div></div></section></div><section class="toggle-row"><label class="step-option"><input id="doSlid" type="checkbox" checked onchange="syncStepBadges()"><span>SLID<br>GPON</span></label><label class="step-option"><input id="doPppoe" type="checkbox" checked onchange="syncStepBadges()"><span>WAN<br>PPPoE</span></label><label class="step-option"><input id="doWifi2g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>2.4 GHz</span></label><label class="step-option"><input id="doWifi5g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>5 GHz</span></label></section><section class="action-card"><button class="run" type="button" id="run">▶ &nbsp;BẮT ĐẦU CẤU HÌNH</button><div id="status" class="status">Sẵn sàng.</div></section></form><section class="card log-card"><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs" class="log">Chưa có log.</pre></section></div><script>function syncStepBadges(){['doSlid','doPppoe','doWifi2g','doWifi5g'].forEach(function(id){var c=document.getElementById(id),b=document.getElementById('badge-'+id);if(c&&b){b.textContent=c.checked?'Enable':'Disable';b.classList.toggle('off',!c.checked)}})}function toggleField(id,b){var e=document.getElementById(id);if(!e)return;e.type=e.type==='password'?'text':'password';b.textContent=e.type==='password'?'◉':'◎';}syncStepBadges();</script>
+<div class="wrap"><header class="appbar"><button class="back" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">‹</button><span class="router"><svg viewBox="0 0 48 40" aria-hidden="true"><path d="M8 8h32a5 5 0 0 1 5 5v5H3v-5a5 5 0 0 1 5-5Zm-5 14h42v10a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V22Zm9 7h5m14 0h5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 8V4m18 4V4" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>CẤU HÌNH MODEM NS V1</strong><button class="menu-home" type="button" aria-label="Về trang chủ" onclick="location.href='index.html'">⋮</button></header><section class="card sync-card"><div class="card-head"><h2><span class="head-icon">⇄</span>Lấy thông tin thuê bao</h2></div><div class="card-body"><div class="sync-lookup"><div class="field"><label for="subscriberAcc">ACC thuê bao</label><input id="subscriberAcc" type="text" placeholder="Nhập ACC thuê bao" autocomplete="off"></div><button type="button" class="sync-fetch" onclick="window.syncSubscriberData(this)">Lấy thông tin</button></div><div class="sync-note" id="syncStatus">Nhập ACC rồi chọn Lấy thông tin để điền dữ liệu vào form.</div></div></section><form id="configForm"><section class="card"><div class="card-head"><h2><span class="head-icon">▣</span>1. ĐĂNG NHẬP MODEM</h2></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>IP Modem</label><input id="ip" value="192.168.1.1" placeholder="192.168.1.1"></div><div class="field"><label><span class="ico">👤</span>Tài khoản</label><input id="username" value="admin"></div><div class="field full"><label><span class="ico">⚙</span>Chế độ đăng nhập</label><select id="loginMode"><option value="1">1 - Modem vừa reset / admin-admin</option><option value="2">2 - Modem đã đổi mật khẩu</option><option value="3">3 - Khôi phục cấu hình mặc định</option></select></div><div class="field full"><label id="passwordLabel"><span class="ico">🔑</span>Mật khẩu mới (nếu cần)</label><div class="field-wrap"><input id="password" type="text" placeholder="Nhập mật khẩu mới cho modem"></div></div></div></div></section><section class="card"><div class="card-head"><h2><span class="head-icon">♧</span>2. SLID GPON</h2><span class="enable-badge" id="badge-doSlid">Enable</span></div><div class="card-body"><div class="field"><label>SLID GPON</label><input id="slid" value="A00012345"></div></div></section><section class="card pppoe-card"><div class="card-head"><h2><span class="head-icon">◎</span>3. WAN - PPPoE</h2><span class="enable-badge" id="badge-doPppoe">Enable</span></div><div class="card-body"><div class="grid"><div class="field"><label><span class="ico">▣</span>Tài khoản PPPoE</label><input id="pppoeUser" value="ppp_user"></div><div class="field"><label><span class="ico">♧</span>VLAN WAN</label><input id="vlan" value="11"></div><div class="field full"><label><span class="ico">🔑</span>Mật khẩu PPPoE</label><div class="field-wrap"><input id="pppoePassword" type="text" value="abcd1234"></div></div></div></div></section><div class="wifi-grid"><section class="card wifi-card band24"><div class="card-head"><h2><span class="head-icon">◉</span>4. WiFi 2.4 GHz</h2><span class="enable-badge" id="badge-doWifi2g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi2gName" type="text" value="WiFi 2.4G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi2gPassword" type="text" value="1234567890"></div></div></div></section><section class="card wifi-card band5"><div class="card-head"><h2><span class="head-icon">◉</span>5. WiFi 5 GHz</h2><span class="enable-badge" id="badge-doWifi5g">Enable</span></div><div class="card-body"><div class="field"><label><span class="ico">◉</span>Tên WiFi (SSID)</label><input id="wifi5gName" type="text" value="WiFi 5G"></div><div class="field" style="margin-top:9px"><label><span class="ico">🔑</span>Mật khẩu WiFi</label><div class="field-wrap"><input id="wifi5gPassword" type="text" value="1234567890"></div></div></div></section></div><section class="toggle-row"><label class="step-option"><input id="doSlid" type="checkbox" checked onchange="syncStepBadges()"><span>SLID<br>GPON</span></label><label class="step-option"><input id="doPppoe" type="checkbox" checked onchange="syncStepBadges()"><span>WAN<br>PPPoE</span></label><label class="step-option"><input id="doWifi2g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>2.4 GHz</span></label><label class="step-option"><input id="doWifi5g" type="checkbox" checked onchange="syncStepBadges()"><span>WiFi<br>5 GHz</span></label></section><section class="action-card"><button class="run" type="button" id="run">▶ &nbsp;BẮT ĐẦU CẤU HÌNH</button><div id="status" class="status">Sẵn sàng.</div></section></form><section class="card log-card"><div class="log-tools" id="logControls"><div class="log-modes"><label class="log-mode"><input type="radio" name="logMode" value="quick" checked> Log</label><label class="log-mode"><input type="radio" name="logMode" value="raw"> Log RAW</label></div><div class="log-actions"><button type="button" id="copyLogs">Copy</button><button type="button" id="clearLogs">Del</button></div></div><pre id="logs" class="log">Chưa có log.</pre></section></div><script>function syncStepBadges(){['doSlid','doPppoe','doWifi2g','doWifi5g'].forEach(function(id){var c=document.getElementById(id),b=document.getElementById('badge-'+id);if(c&&b){b.textContent=c.checked?'Enable':'Disable';b.classList.toggle('off',!c.checked)}})}function toggleField(id,b){var e=document.getElementById(id);if(!e)return;e.type=e.type==='password'?'text':'password';b.textContent=e.type==='password'?'◉':'◎';}syncStepBadges();</script>
 <script>
 (function(){
   function byId(id){ return document.getElementById(id); }
@@ -1005,13 +1055,31 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     if(mode==='1'){
       if(label) label.textContent='Mật khẩu mới';
       if(input) input.placeholder='Nhập mật khẩu mới cho modem';
+    }else if(mode==='3'){
+      if(label) label.textContent='Mật khẩu hiện tại (dùng để reset)';
+      if(input) input.placeholder='Nhập mật khẩu hiện tại của modem';
     }else{
       if(label) label.textContent='Mật khẩu hiện tại';
       if(input) input.placeholder='Nhập mật khẩu hiện tại của modem';
     }
+    syncResetMode();
+  }
+  function syncResetMode(){
+    var reset=val('loginMode')==='3', form=byId('configForm');
+    if(form) form.querySelectorAll('input,select,textarea,button:not(#run)').forEach(function(el){if(el.dataset.resetWasDisabled===undefined)el.dataset.resetWasDisabled=el.disabled?'1':'0';el.disabled=el.dataset.resetWasDisabled==='1'||(reset&&el.id!=='password'&&el.id!=='loginMode');});
+    ['subscriberAcc'].forEach(function(id){var el=byId(id);if(el)el.disabled=reset;});
+    var syncButton=document.querySelector('.sync-fetch');if(syncButton)syncButton.disabled=reset;
   }
   var loginModeEl=byId('loginMode');
-  if(loginModeEl) loginModeEl.addEventListener('change',updatePasswordLabel);
+  var resetAutoStarted=false;
+  function triggerResetFromMode(){
+    if(val('loginMode')!=='3'){resetAutoStarted=false;return;}
+    if(!val('password')){setStatus('Nhập mật khẩu hiện tại, sau đó chọn lại chế độ 3 để reset.','running');window.alert('Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu, sau đó chọn lại chế độ 3 để reset.');loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;return;}
+    if(resetAutoStarted)return;
+    resetAutoStarted=true;
+    runConfig();
+  }
+  if(loginModeEl) loginModeEl.addEventListener('change',function(){updatePasswordLabel();triggerResetFromMode();});
   updatePasswordLabel();
 
   async function runConfig(){
@@ -1030,6 +1098,17 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     };
     try{
       if(!cfg.ip) throw new Error('Chưa nhập IP modem');
+      if(cfg.loginMode==='3'){
+        if(!cfg.password) throw new Error('Hãy nhập mật khẩu hiện tại ở chế độ 2 trước khi chọn chức năng 3.');
+        if(!window.confirm('Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?')){loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;setStatus('Đã hủy reset.','');if(run)run.disabled=false;return;}
+        var rr=await fetch('${API_PREFIX}/api/reset-default',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ip:cfg.ip,username:cfg.username,loginMode:cfg.loginMode,password:cfg.password}),cache:'no-store'});
+        var rd=await rr.json();
+        if(!rr.ok||!rd.ok) throw new Error(rd.error||('HTTP '+rr.status));
+        loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;
+        setStatus('✅ Đã gửi lệnh khôi phục mặc định. Modem sẽ khởi động lại.','running');
+        await refresh();
+        return;
+      }
       var r=await fetch('${API_PREFIX}/api/configure',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg),cache:'no-store'});
       var d=await r.json();
       if(!r.ok || !d.ok) throw new Error(d.error || ('HTTP '+r.status));
@@ -1037,6 +1116,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
       await refresh();
     }catch(e){
       setStatus('❌ '+e.message,'err');
+      if(cfg.loginMode==='3'){loginModeEl.value='2';updatePasswordLabel();resetAutoStarted=false;}
       if(run) run.disabled=false;
     }
   }
@@ -1187,7 +1267,7 @@ function startConfigureFromUrl(res, url) {
   // Không ghi query string hoặc mật khẩu vào nhật ký.
   configureModem(cfg).then(r => { lastResult = r || {ok:true}; })
     .catch(e => { lastResult = {ok:false,error:e.message || String(e)}; stepLog("Lỗi: " + lastResult.error); })
-    .finally(() => { busy = false; });
+    .finally(() => { currentToken = null; busy = false; });
   return sendHtml(res, configurePage("CẤU HÌNH MODEM NS V1", process.env.NS_EMBED ? "/nsv1" : ""));
 }
 
@@ -1202,11 +1282,24 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/client-log") { const data=JSON.parse(await getBody(req)||"{}"); const stamp=`[${new Date().toLocaleTimeString("vi-VN",{hour12:false})}]\n`; if(data.quick)lastLogs.push(stamp+String(data.quick)); if(data.raw)rawLogs.push(stamp+String(data.raw)); lastLogs=lastLogs.slice(-250); rawLogs=rawLogs.slice(-250); return sendJson(res,200,{ok:true}); }
     if (req.method === "GET" && url.pathname === "/api/status") return sendJson(res, 200, {ok:true,busy,logs:lastLogs,rawLogs,result:lastResult});
     if (req.method === "DELETE" && url.pathname === "/api/logs") { lastLogs=[]; rawLogs=[]; lastResult=null; return sendJson(res,200,{ok:true}); }
+    if (req.method === "POST" && url.pathname === "/api/reset-default") {
+      if (busy) return sendJson(res,409,{ok:false,error:"Đang có một tác vụ modem khác chạy."});
+      const cfg = await getBody(req);
+      if (String(cfg.loginMode) !== "3") return sendJson(res,400,{ok:false,error:"Hãy chọn chức năng 3 - Khôi phục mặc định."});
+      if (net.isIP(clean(cfg.ip,"192.168.1.1")) !== 4) return sendJson(res,400,{ok:false,error:"IP modem phải là địa chỉ IPv4 hợp lệ."});
+      if (!clean(cfg.password)) return sendJson(res,400,{ok:false,error:"Chưa nhập mật khẩu hiện tại của modem."});
+      busy=true; lastLogs=[]; rawLogs=[]; lastResult=null;
+      resetModemToDefault(cfg).then(r=>{lastResult=r;})
+        .catch(e=>{lastResult={ok:false,error:e.message||String(e)};stepLog("Lỗi reset: "+lastResult.error);})
+        .finally(()=>{currentToken=null;busy=false;});
+      return sendJson(res,202,{ok:true,message:"Đã bắt đầu khôi phục mặc định."});
+    }
     if (req.method === "POST" && url.pathname === "/api/configure") {
       if (busy) return sendJson(res, 409, {ok:false,error:"Đang có một phiên cấu hình khác chạy."});
       const cfg = await getBody(req);
       busy=true; lastLogs=[]; lastResult=null;
-      configureModem(cfg).then(r=>{lastResult=r;}).catch(e=>{lastResult={ok:false,error:e.message||String(e)};stepLog(`Lỗi: ${lastResult.error}`);}).finally(()=>{busy=false;});
+      currentToken=null;
+      configureModem(cfg).then(r=>{lastResult=r;}).catch(e=>{lastResult={ok:false,error:e.message||String(e)};stepLog(`Lỗi: ${lastResult.error}`);}).finally(()=>{currentToken=null;busy=false;});
       return sendJson(res,202,{ok:true,message:"Đã bắt đầu cấu hình"});
     }
     res.writeHead(404);res.end("Not Found");
