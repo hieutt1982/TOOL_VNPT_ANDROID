@@ -80,6 +80,9 @@ public final class WebBridge {
                     String name = names.next();
                     requestBuilder.header(name, headers.optString(name, ""));
                 }
+                // Force each modem exchange to finish its TCP/TLS socket. The
+                // modem may reboot or close keep-alive sockets after a POST.
+                if (modem) requestBuilder.header("Connection", "close");
 
                 if ("GET".equals(httpMethod) || "HEAD".equals(httpMethod)) {
                     requestBuilder.method(httpMethod, null);
