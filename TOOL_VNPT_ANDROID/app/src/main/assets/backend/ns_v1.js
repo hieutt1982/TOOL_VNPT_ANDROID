@@ -1070,7 +1070,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
   var resetAutoStarted=false;
   function triggerResetFromMode(){
     if(val('loginMode')!=='3'){resetAutoStarted=false;return;}
-    if(!val('password')){setStatus('Nhập mật khẩu hiện tại của modem; reset sẽ tự chạy khi bạn rời ô mật khẩu.','running');return;}
+    if(!val('password')){setStatus('Nhập mật khẩu hiện tại của modem; reset sẽ tự chạy khi bạn rời ô mật khẩu.','running');window.alert('Chưa có mật khẩu hiện tại của modem. Hãy nhập mật khẩu; reset sẽ tự chạy khi bạn rời ô mật khẩu.');return;}
     if(resetAutoStarted)return;
     resetAutoStarted=true;
     runConfig();
