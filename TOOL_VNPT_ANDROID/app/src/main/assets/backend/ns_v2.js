@@ -437,11 +437,20 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
   }
   function syncResetMode(){
     var reset=$("mode").value==="3";
-    document.querySelectorAll("#configForm input,#configForm select,#configForm textarea,#configForm button:not(#run)").forEach(function(el){if(el.dataset.resetWasDisabled===undefined)el.dataset.resetWasDisabled=el.disabled?"1":"0";el.disabled=el.dataset.resetWasDisabled==="1"||(reset&&el.id!=="modemPass");});
+    document.querySelectorAll("#configForm input,#configForm select,#configForm textarea,#configForm button:not(#run)").forEach(function(el){if(el.dataset.resetWasDisabled===undefined)el.dataset.resetWasDisabled=el.disabled?"1":"0";el.disabled=el.dataset.resetWasDisabled==="1"||(reset&&el.id!=="modemPass"&&el.id!=="mode");});
     ["subscriberAcc"].forEach(function(id){var el=$(id);if(el)el.disabled=reset;});
     var syncButton=document.querySelector(".sync-fetch");if(syncButton)syncButton.disabled=reset;
   }
-  $("mode").addEventListener("change",updatePasswordLabel);
+  var resetAutoStarted=false;
+  function triggerResetFromMode(){
+    if($("mode").value!=="3"){resetAutoStarted=false;return;}
+    if(!val("modemPass")){$("status").textContent="Nhập mật khẩu hiện tại của modem; reset sẽ tự chạy khi bạn rời ô mật khẩu.";$("status").className="status running";return;}
+    if(resetAutoStarted)return;
+    resetAutoStarted=true;
+    $("run").click();
+  }
+  $("mode").addEventListener("change",function(){updatePasswordLabel();triggerResetFromMode();});
+  $("modemPass").addEventListener("change",triggerResetFromMode);
   updatePasswordLabel();
   $("run").addEventListener("click",async function(){
     var payload={
@@ -455,7 +464,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     try{
       if(payload.mode==="3"){
         if(!payload.modemPass)throw new Error("Nhập mật khẩu hiện tại của modem để reset.");
-        if(!window.confirm("Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?")){$("status").textContent="Sẵn sàng.";$("status").className="status ok";return;}
+        if(!window.confirm("Khôi phục cài đặt mặc định sẽ xóa cấu hình modem và khởi động lại. Tiếp tục?")){resetAutoStarted=false;$("status").textContent="Sẵn sàng.";$("status").className="status ok";return;}
         var rr=await fetch('${API_PREFIX}/api/reset-default',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
         var rd=await rr.json();if(!rr.ok||!rd.ok)throw new Error(rd.error||"Không thể bắt đầu reset.");
         await refresh();return;
@@ -467,6 +476,7 @@ input,select{width:100%;height:auto!important;min-height:46px!important;padding:
     }catch(e){
       $("status").textContent="❌ LỖI: "+e.message;
       $("status").className="status err";
+      if(payload.mode==="3")resetAutoStarted=false;
     }
   });
   document.querySelectorAll("input[name=logMode]").forEach(function(el){el.addEventListener("change",refresh);});
