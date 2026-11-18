@@ -35,7 +35,53 @@ jobs:
         working-directory: TOOL_VNPT_ANDROID
         run: gradle --no-daemon assembleDebug
 
+      - name: Generate version.json from APK
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          import re
+          import json
+          import os
+
+          apk = "TOOL_VNPT_ANDROID/app/build/outputs/apk/debug/app-debug.apk"
+          aapt = os.path.join(
+              os.environ["ANDROID_HOME"],
+              "build-tools/35.0.0/aapt"
+          )
+
+          result = subprocess.check_output(
+              [aapt, "dump", "badging", apk],
+              text=True
+          )
+
+          match = re.search(
+              r"^package:.*versionCode='([^']+)'.*versionName='([^']*)'",
+              result,
+              re.MULTILINE
+          )
+
+          if not match:
+              raise Exception("Không đọc được phiên bản APK")
+
+          data = {
+              "versionCode": int(match.group(1)),
+              "versionName": match.group(2),
+              "apkFileId": "",
+              "description": "Cập nhật phiên bản mới"
+          }
+
+          output = "TOOL_VNPT_ANDROID/version.json"
+
+          with open(output, "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+
+          print("Đã tạo version.json:")
+          print(json.dumps(data, ensure_ascii=False, indent=2))
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: TOOL-VNPT-debug-apk
-          path: TOOL_VNPT_ANDROID/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            TOOL_VNPT_ANDROID/app/build/outputs/apk/debug/app-debug.apk
+            TOOL_VNPT_ANDROID/version.json
