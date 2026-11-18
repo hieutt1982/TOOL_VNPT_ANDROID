@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đồng bộ dữ liệu thuê bao</title>
+</head>
+<body>
+<script>
+(function(){
+  'use strict';
+  const pending=new Map();
+  let sequence=0;
+  const endpoint='https://api-onebss.vnpt.vn/app-thicong/baoHong/doKiem';
+  const menuId=10299;
+  const appSecret='eyJkZXZpY2VfaWQiOiI1NDUyNGMzMDY1ODI5MGE3IiwiZGV2aWNlX2lwIjoiMTkyLjE2OC4xLjIzIiwiZGV2aWNlX25hbWUiOiJPWEYtQU4wMCAtIEhvbm9yIiwibWFjX2FkZHJlc3MiOiIwMDpkYjpkODpmZDpmZDo0MiIsIm1vYmlsZV9pZCI6ImYyRmt2NnQ1UThxS1lXRmFvMkdSVXY6QVBBOTFiSElqZTByYzJKSXJDZ1FiUGpZUk1ibHNGWGppd0JublVDRThzN3gxTTdxbURod09Nc05KeTBpd2dsdm5YRjJ4N2plUC14V2Y5bElocC1kQnRURVA2azNqbEgtSmE5RXpOb2JNdTdyekNRRW1yWHQ1WGsiLCJhcHBfaWQiOiIxIiwiYXBwX3ZlcnNpb24iOiIxLjUuNDEuMjI2Iiwib3NfdmVyc2lvbiI6IkFuZHJvaWQgOSAtIChTREsgMjgpIn0=';
+  function sendResult(result){try{window.parent.postMessage(Object.assign({type:'subscriber-sync-result'},result),'*');}catch(e){}}
+  function syncLog(quick,raw){try{window.parent.postMessage({type:'doki-sync-log',quick,raw},'*');}catch(e){}}
+  function request(kind,lookup,token){
+    const id='doki-'+(++sequence);
+    const body=JSON.stringify({kieu:kind,maTb:lookup,profile:{date:new Date().toISOString(),lyDo:'',newPass:'',speed:'',time:new Date().toLocaleString('vi-VN')},wifis:[{authMode:null,enable:true,encrypt:null,index:0,password:'',ssid:'',type:null}],hdtb_id:-1,menu_id:menuId});
+    const headers={'Content-Type':'application/json','Authorization':'Bearer '+token.access_token,'selectedmenuid':String(menuId),'app-secret':appSecret};
+    syncLog('Gửi API doKiem, loại '+kind+'.','POST '+endpoint+'\nHeaders: Content-Type, selectedmenuid='+menuId+', Authorization=[ẨN TOKEN], app-secret=[ẨN]\nBody: '+body);
+    return new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Quá thời gian gọi API doKiem'));},50000);
+      pending.set(id,{resolve,reject,timer});
+      window.parent.postMessage({type:'doki-http-request',id,url:endpoint,method:'POST',headers,body},'*');
+    });
+  }
+  window.addEventListener('message',event=>{
+    if(event.source!==window.parent||!event.data||event.data.type!=='doki-http-response')return;
+    const item=pending.get(event.data.id);if(!item)return;
+    clearTimeout(item.timer);pending.delete(event.data.id);
+    if(!event.data.ok){syncLog('API doKiem lỗi kết nối, mã yêu cầu '+id+'.','HTTP transport error: '+(event.data.error||'unknown'));item.reject(new Error(event.data.error||('HTTP '+event.data.status)));return;}
+    syncLog('API doKiem phản hồi HTTP '+event.data.status+'.','HTTP '+event.data.status+'\nResponse body: '+String(event.data.text||''));
+    let data;try{data=JSON.parse(event.data.text||'{}');}catch(e){data={message:event.data.text||''};}
+    if(Number(event.data.status)<200||Number(event.data.status)>=300){item.reject(new Error('HTTP '+event.data.status+' '+String(data.message||data.error||'')));return;}
+    item.resolve(data);
+  });
+  function validToken(){
+    let token=null;
+    try{const raw=AndroidBridge.getOneLinkToken();token=raw?JSON.parse(raw):null;}catch(e){}
+    if(!token){try{token=JSON.parse(localStorage.getItem('onebss_token')||'null');}catch(e){}}
+    if(!token||!token.access_token)return null;
+    if(token.expires_at&&Date.now()/1000>=Number(token.expires_at))return null;
+    return token;
+  }
+  function extractSlid(value){const text=String(value||'').replace(/<br\s*\/?\s*>/gi,'\n').replace(/<[^>]*>/g,' ');const m=text.match(/(?:Số\s*ảo|SLID)\s*[:：]\s*([^\s<]+)/i);return m?m[1].trim():'';}
+  function extractPppoePassword(value){const m=String(value||'').match(/(?:<br\s*\/?\s*>|\r?\n|^)\s*Mật khẩu\s*:\s*([^<\r\n]+)/i);return m?m[1].trim():'';}
+  function extractWifi(value){
+    const text=String(value||'').replace(/<br\s*\/?\s*>/gi,'\n');
+    const records=Array.from(text.matchAll(/\[([^\]]*\bssid\s*:[^\]]*)\]/gi),m=>m[1]);
+    const parsed=records.map(row=>{const get=key=>{const m=row.match(new RegExp('(?:^|[,\\s])'+key+'\\s*:\\s*([^,\\]\\r\\n]*)','i'));return m?m[1].trim():'';};return {type:get('type'),name:get('ssid'),password:get('password'),enabled:/^true$/i.test(get('enable'))};}).filter(x=>x.name&&x.name.toLowerCase()!=='null');
+    const choose=items=>items.find(x=>x.enabled)||items[0]||null;
+    let two=choose(parsed.filter(x=>/2\s*\.\s*4\s*G|2\.4\s*GHz|2G/i.test(x.type))),five=choose(parsed.filter(x=>/5\s*G|5\s*GHz/i.test(x.type))),mirrored=false;
+    if(!two||!five){const source=two||five||choose(parsed);if(source){two=two||source;five=five||source;mirrored=true;}}
+    let name5=five?five.name:'';if(mirrored&&name5&&!/\s5G$/i.test(name5))name5+=' 5G';
+    return {wifi2gName:two?two.name:'',wifi2gPassword:two?two.password:'',wifi5gName:name5,wifi5gPassword:five?five.password:'',mirrored};
+  }
+  async function run(){
+    const lookup=new URLSearchParams(location.search).get('lookup')||'';
+    if(!lookup){sendResult({ok:false,error:'Nhập ACC thuê bao rồi bấm LẤY THÔNG TIN.'});return;}
+    const token=validToken();
+    if(!token){sendResult({ok:false,error:'Phiên đăng nhập VNPT TOOL đã hết hạn hoặc chưa có. Hãy đăng nhập lại.'});return;}
+    try{
+      const results=await Promise.allSettled([request(0,lookup,token),request(3,lookup,token),request(10,lookup,token)]);
+      const info=results[0].status==='fulfilled'?results[0].value:null;
+      const wifiResult=results[1].status==='fulfilled'?results[1].value:null;
+      const visa=results[2].status==='fulfilled'?results[2].value:null;
+      const success=data=>!!data&&(!data.error||data.error==='BSS-00000000');
+      const fields={slid:'',pppoeUser:lookup,pppoePassword:'',wifi2gName:'',wifi2gPassword:'',wifi5gName:'',wifi5gPassword:''};
+      if(info&&success(info))fields.slid=extractSlid(info.data);
+      if(visa&&success(visa))fields.pppoePassword=extractPppoePassword(visa.data);
+      let wifi=extractWifi(wifiResult&&success(wifiResult)?wifiResult.data:'');
+      for(let retry=1;retry<=2&&(!wifi.wifi2gName||!wifi.wifi5gName);retry++){
+        await new Promise(resolve=>setTimeout(resolve,1200));
+        try{const next=await request(3,lookup,token);if(success(next))wifi=extractWifi(next.data);}catch(e){}
+      }
+      fields.wifi2gName=wifi.wifi2gName;fields.wifi2gPassword=wifi.wifi2gPassword;fields.wifi5gName=wifi.wifi5gName;fields.wifi5gPassword=wifi.wifi5gPassword;
+      const got=[];if(fields.slid)got.push('SLID');if(fields.pppoePassword)got.push('mật khẩu PPPoE');if(fields.wifi2gName)got.push('Wi-Fi 2.4 GHz');if(fields.wifi5gName)got.push('Wi-Fi 5 GHz');
+      const missing=[];if(!fields.slid)missing.push('SLID');if(!fields.pppoePassword)missing.push('mật khẩu PPPoE');if(!fields.wifi2gName)missing.push('Wi-Fi 2.4 GHz');if(!fields.wifi5gName)missing.push('Wi-Fi 5 GHz');
+      if(!got.length){const errors=results.filter(x=>x.status==='rejected').map(x=>x.reason&&x.reason.message).filter(Boolean);sendResult({ok:false,error:'API không trả dữ liệu để điền'+(errors.length?': '+errors.join(' | '):'. Kiểm tra ACC thuê bao.')});return;}
+      sendResult({ok:true,fields,summary:'Đã lấy: '+got.join(', ')+(missing.length?'. Còn thiếu: '+missing.join(', '):'.')});
+    }catch(error){sendResult({ok:false,error:'Lỗi lấy dữ liệu thuê bao: '+(error.message||error)});}
+  }
+  run();
+})();
+</script>
+</body>
+</html>

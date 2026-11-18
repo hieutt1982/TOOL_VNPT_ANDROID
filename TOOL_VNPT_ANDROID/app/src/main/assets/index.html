@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#064b9a">
+<script src="onelink/native-fetch.js"></script>
+<title>VNPT TOOL - Android</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#092b66;background:#eaf5ff;font-synthesis:none}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;width:100%;overflow-x:hidden}
+body{min-height:100dvh;background:linear-gradient(180deg,#e8f4ff 0%,#f7fbff 54%,#e9f5ff 100%)}
+.hero{position:relative;overflow:hidden;min-height:246px;padding:calc(28px + env(safe-area-inset-top)) 22px 38px;background:linear-gradient(115deg,#073775,#0754a8 67%,#06448d);color:#fff;isolation:isolate}
+.hero:before,.hero:after{content:"";position:absolute;z-index:-1;left:-4%;right:-6%;height:115px;bottom:-62px;border-radius:50% 48% 0 0/45% 55% 0 0;transform:rotate(-5deg)}
+.hero:before{background:linear-gradient(90deg,#0a61b9,#13a6ed);bottom:-72px;height:142px}
+.hero:after{background:linear-gradient(90deg,#168de0,#28b8f7);bottom:-96px;left:20%;opacity:.88}
+.hero-row{max-width:980px;margin:0 auto;display:flex;align-items:center;gap:18px}
+.brand-logo{width:110px;height:52px;flex:none;display:grid;place-items:center;padding:3px 7px;overflow:hidden;border-radius:9px;background:#fff;box-shadow:0 2px 8px #001c4a30}.brand-logo img{width:100%;height:100%;object-fit:contain;clip-path:inset(2px 0 0 0)}.brand-logo.symbol{width:78px;height:78px;padding:7px;border-radius:50%;background:#fff}.brand-logo.symbol img{clip-path:none}
+.hero h1{font-size:clamp(25px,5.4vw,52px);line-height:1.05;margin:0;font-weight:800;letter-spacing:.3px}
+.settings{margin-left:auto;border:0;background:transparent;color:#fff;padding:8px;cursor:pointer;flex:none}
+.settings svg{width:48px;height:48px;fill:currentColor}
+.tagline{max-width:500px;margin:10px auto 0;display:flex;align-items:center;gap:18px;justify-content:center;font-size:clamp(17px,3vw,27px);font-style:italic;font-weight:600}
+.tagline:before,.tagline:after{content:"";height:2px;background:#d8efff;flex:1;max-width:135px;border-radius:3px}
+main{width:min(100%,1000px);margin:0 auto;padding:30px 20px 12px}
+.products{display:grid;gap:24px}
+.product{--accent:#1483e6;display:grid;grid-template-columns:clamp(88px,22vw,205px) minmax(0,1fr) 42px;gap:24px;align-items:center;min-height:210px;padding:13px 24px 13px 13px;border:2px solid color-mix(in srgb,var(--accent) 38%,white);border-radius:38px;background:linear-gradient(100deg,#fff 0%,#f4f9ff 100%);box-shadow:0 6px 12px #2863a52b;color:#092b66;text-decoration:none;transition:transform .15s,box-shadow .15s}
+.product:active{transform:scale(.99);box-shadow:0 2px 6px #2863a52b}
+.product.green{--accent:#16be9a}.product.orange{--accent:#ffad16}.product.purple{--accent:#a24bea}
+.product-icon{height:100%;min-height:178px;aspect-ratio:1;display:grid;place-items:center;border-radius:28px;background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 90%,white),color-mix(in srgb,var(--accent) 70%,#00439a));box-shadow:inset 0 2px 12px #ffffff4d,0 4px 8px #174f8830}
+.product-icon svg{width:72%;height:72%;filter:drop-shadow(0 5px 2px #0002)}
+.product-copy h2{margin:0 0 12px;color:#09275d;font-size:clamp(20px,4vw,40px);line-height:1.1;font-weight:800}
+.product-copy p{margin:0;color:#122d59;font-size:clamp(16px,2.8vw,28px);line-height:1.42}
+.arrow{font-size:55px;line-height:1;color:#0c58ae;font-weight:400;text-align:right}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:50px 8px 44px}
+.action{min-height:148px;padding:15px 8px;border:1px solid #d7eaff;border-radius:30px;background:linear-gradient(150deg,#fff,#f4f9ff);box-shadow:0 7px 12px #2863a52b;color:#092b66;font:inherit;font-size:clamp(15px,2.5vw,25px);font-weight:700;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:9px;cursor:pointer}
+.action svg{width:58px;height:58px}
+.action.info svg{color:#078dea}.action.logs svg{color:#ff9600}.action.update svg{color:#f33378}.action.exit svg{color:#315d8d}
+.footer{position:relative;overflow:hidden;min-height:115px;padding:20px 6% 28px;display:flex;align-items:center;color:#0754a8}
+.footer-brand{display:flex;align-items:center;z-index:1}
+.footer-brand img{width:145px;height:54px;object-fit:contain;clip-path:inset(2px 0 0 0);background:#fff;border-radius:8px;padding:4px}
+.city{position:absolute;right:3%;bottom:20px;width:min(38%,370px);height:95px;color:#80c8fa;opacity:.48}
+.footer:after{content:"";position:absolute;left:-5%;right:-5%;bottom:-54px;height:90px;background:linear-gradient(170deg,#2db7f1,#0575cf 55%,#0754a8);border-radius:50% 42% 0 0/40% 48% 0 0;transform:rotate(-4deg)}
+.dialog-backdrop{position:fixed;inset:0;z-index:10;background:#0516319c;display:none;align-items:center;justify-content:center;padding:18px}
+.dialog-backdrop.open{display:flex}
+.dialog{width:min(100%,620px);max-height:82dvh;overflow:auto;border-radius:20px;background:#fff;padding:20px;box-shadow:0 16px 50px #001c4a66;color:#102e60}
+.dialog h2{margin:0 0 14px;font-size:24px}.dialog pre{max-height:55dvh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f2f7fc;padding:12px;border-radius:10px;font:12px/1.45 Consolas,monospace}
+.dialog-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}.dialog-actions button{border:0;border-radius:10px;background:#125daf;color:#fff;padding:10px 15px;font:inherit;font-weight:700}
+@media(max-width:620px){
+ .hero{min-height:205px;padding:calc(25px + env(safe-area-inset-top)) 18px 32px}.brand-logo{width:91px;height:44px;padding:3px 6px}.brand-logo.symbol{width:60px;height:60px;padding:5px}.settings svg{width:38px;height:38px}.hero-row{gap:12px}
+ main{padding:20px 16px 8px}.products{gap:18px}.product{grid-template-columns:minmax(82px,24vw) minmax(0,1fr) 22px;gap:14px;min-height:152px;padding:10px 15px 10px 10px;border-radius:28px}.product-icon{min-height:0;width:100%;height:auto;aspect-ratio:1;border-radius:22px}.product-copy h2{margin-bottom:8px}.arrow{font-size:38px}
+ .actions{gap:10px;margin:36px 2px 28px}.action{min-height:112px;border-radius:22px;padding:10px 5px;gap:8px}.action svg{width:43px;height:43px}.footer{min-height:95px}.footer-brand img{width:120px;height:46px}
+}
+@media(max-width:390px){.hero h1{font-size:23px}.product{grid-template-columns:78px minmax(0,1fr) 18px;gap:11px;padding-right:10px}.product-copy h2{font-size:18px}.product-copy p{font-size:14px}.actions{gap:7px}.action{font-size:13px;min-height:95px}.action svg{width:36px;height:36px}}
+
+.hidden{display:none!important}
+.auth-gate{min-height:100dvh;display:grid;place-items:center;padding:calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));background:linear-gradient(145deg,#073775,#0875cf 68%,#27b5ec)}
+.auth-panel{width:min(100%,520px);padding:24px;border:1px solid #ffffff75;border-radius:22px;background:#f8fbff;box-shadow:0 16px 42px #00285355;color:#092b66}
+.auth-title{margin:0 0 5px;font-size:25px;font-weight:800}.auth-caption{margin:0 0 20px;color:#55708f;font-size:14px}
+.auth-panel label{display:block;margin:12px 0 5px;font-size:14px;font-weight:700}
+.auth-panel input{width:100%;height:46px;padding:9px 12px;border:1px solid #9bb4d1;border-radius:10px;background:#fff;color:#14243b;font:16px Arial,sans-serif}
+.auth-panel input:focus{outline:2px solid #2682e8;border-color:#2682e8}
+.auth-panel button{width:100%;min-height:46px;margin-top:14px;border:0;border-radius:10px;background:#0873e5;color:#fff;font:700 16px Arial,sans-serif}
+.auth-status{margin-top:12px;padding:10px 12px;border-radius:9px;background:#eaf3ff;color:#123a66;font-size:13px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.auth-error{background:#fff0f0;color:#9a2020}.auth-success{background:#eaf8ef;color:#166534}
+@media(max-width:390px){.auth-panel{padding:18px;border-radius:17px}.auth-title{font-size:22px}}
+</style>
+</head>
+<body>
+<section id="authGate" class="auth-gate">
+  <div class="auth-panel">
+    <h1 class="auth-title">Đăng nhập VNPT TOOL</h1>
+    <p class="auth-caption">Đăng nhập và xác thực OTP để mở VNPT TOOL.</p>
+    <label for="authUsername">Username</label>
+    <input id="authUsername" autocomplete="username" placeholder="Nhập username">
+    <label for="authPassword">Password</label>
+    <input id="authPassword" type="text" autocomplete="current-password" placeholder="Nhập password">
+    <button id="authLoginBtn" type="button" onclick="loginStep1()">Đăng nhập / Gửi OTP</button>
+    <div id="authOtpBox" class="hidden">
+      <label for="authOtp">OTP</label>
+      <input id="authOtp" inputmode="numeric" autocomplete="one-time-code" placeholder="Nhập OTP">
+      <button id="authOtpBtn" type="button" onclick="loginStep2()">Xác thực OTP</button>
+    </div>
+    <div id="authStatus" class="auth-status" aria-live="polite">Chưa đăng nhập.</div>
+  </div>
+</section>
+<div id="appShell" class="hidden">
+<header class="hero">
+  <div class="hero-row">
+    <span class="brand-logo symbol"><img src="vnpt-symbol.png" alt="Biểu tượng VNPT"></span>
+    <h1>VNPT TOOL - Android</h1>
+    <button class="settings" type="button" aria-label="Thông tin" onclick="showInfo()"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.95l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.23-1.14.55-1.63.95l-2.39-.96a.5.5 0 0 0-.61.22L2.62 8.84a.5.5 0 0 0 .12.64l2.03 1.58a6 6 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.49.4 1.04.72 1.63.95l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.23 1.14-.55 1.63-.95l2.39.96c.23.09.49 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg></button>
+  </div>
+  <div class="tagline"><span>Trần Trung Hiếu</span></div>
+</header>
+<main>
+  <section class="products" aria-label="Chọn chức năng modem">
+    <a class="product" href="module.html?m=nsv1"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#f8fbff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#1767aa" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL NS V1</h2><p>Cấu hình modem qua WebView<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
+    <a class="product green" href="module.html?m=nsv2"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#f8fbff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#0f947c" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL NS V2</h2><p>Cấu hình modem qua WebView<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
+    <a class="product orange" href="module.html?m=g040h"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#fff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#c97000" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL G040H</h2><p>Cấu hình modem G040H<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
+    <a class="product purple" href="onelink/onelink.html"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M30 45a19 19 0 0 1 19-19c8 0 14 5 17 12 3-5 8-8 15-8 12 0 21 9 21 21 8 2 13 9 13 17 0 10-8 18-18 18H35c-11 0-20-9-20-20 0-10 6-18 15-21z" stroke="white" stroke-width="5"/><path d="M37 72h48v30H37z" fill="#fff"/><path d="M60 77v18m0-18-6 6m6-6 6 6M60 97v-7m0 0-6 6m6-6 6 6" stroke="#8b45c6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 105h62" stroke="white" stroke-width="5" stroke-linecap="round"/></svg></div><div class="product-copy"><h2>MODEM REMOTE</h2><p>Quản lý &amp; cấu hình modem từ xa<br>(OneLink / API VNPT)</p></div><span class="arrow">›</span></a>
+  </section>
+  <section class="actions" aria-label="Tiện ích">
+    <button class="action info" type="button" onclick="showInfo()"><svg viewBox="0 0 64 64" fill="currentColor"><circle cx="32" cy="32" r="27"/><path d="M29 28h6v21h-6zm0-13h6v7h-6z" fill="white"/></svg><span>Thông tin</span></button>
+    <button class="action logs" type="button" onclick="showLogs()"><svg viewBox="0 0 64 64" fill="currentColor"><path d="M17 10h30v7h7v39H10V17h7zm4 13v4h22v-4zm0 10v4h22v-4zm0 10v4h17v-4zM24 5h16v10H24z"/></svg><span>Nhật ký</span></button>
+    <button class="action update" type="button" onclick="checkUpdate()"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M52 24A22 22 0 0 0 14 17l-5 6m0-13v13h13M12 40a22 22 0 0 0 38 7l5-6m0 13V41H42"/></svg><span>Cập nhật</span></button>
+    <button class="action exit" type="button" onclick="exitApp()"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M37 13h14a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H37M28 20l13 12-13 12M41 32H8"/></svg><span>Thoát</span></button>
+  </section>
+</main>
+<footer class="footer"><svg class="city" viewBox="0 0 360 100" fill="currentColor" aria-hidden="true"><path d="M0 100V57h20V35h8v22h10V20h18v80h10V48h12V29h7v19h13V13h26v87h10V42h12V24h8v18h13V8h30v92h9V37h11V17h8v20h13V30h26v70h10V51h14V32h8v19h20v49z"/></svg></footer>
+<div class="dialog-backdrop" id="dialogBackdrop" onclick="if(event.target===this)closeDialog()"><section class="dialog" role="dialog" aria-modal="true"><h2 id="dialogTitle"></h2><div id="dialogBody"></div><div class="dialog-actions" id="dialogActions"></div></section></div>
+</div>
+<script src="bridge.js"></script>
+<script>
+
+const ONE_API_1='/api/auth/step1', ONE_API_2='/api/auth/step2';
+const ONE_DEVICE_ID='54524c30658290a7', ONE_MOBILE_ID='', ONE_TOKEN_KEY='onebss_token', LOGIN_CREDENTIALS_KEY='vnpt_tool_login_credentials';
+let pendingOneLogin=null, oneLoginBusy=false;
+function setAuthStatus(message,kind=''){const el=document.getElementById('authStatus');el.textContent=message;el.className='auth-status'+(kind?' auth-'+kind:'')}
+function saveLoginCredentials(){try{const username=document.getElementById('authUsername')?.value||'',password=document.getElementById('authPassword')?.value||'';localStorage.setItem(LOGIN_CREDENTIALS_KEY,JSON.stringify({username,password}))}catch(e){}}
+function restoreLoginCredentials(){try{const saved=JSON.parse(localStorage.getItem(LOGIN_CREDENTIALS_KEY)||'null');if(!saved)return;document.getElementById('authUsername').value=saved.username||'';document.getElementById('authPassword').value=saved.password||''}catch(e){}}
+function readOneToken(){try{const raw=AndroidBridge.getOneLinkToken();if(raw){const value=JSON.parse(raw);localStorage.setItem(ONE_TOKEN_KEY,raw);return value}}catch(e){}try{return JSON.parse(localStorage.getItem(ONE_TOKEN_KEY)||'null')}catch(e){return null}}
+function writeOneToken(value){const raw=JSON.stringify(value);localStorage.setItem(ONE_TOKEN_KEY,raw);try{AndroidBridge.saveOneLinkToken(raw)}catch(e){}}
+function clearOneToken(){localStorage.removeItem(ONE_TOKEN_KEY);try{AndroidBridge.clearOneLinkToken()}catch(e){}}
+function validOneToken(){const token=readOneToken();if(!token||!token.access_token)return null;if(token.expires_at&&Date.now()/1000>=Number(token.expires_at)){clearOneToken();return null}return token}
+function showAppShell(){document.getElementById('authGate').classList.add('hidden');document.getElementById('appShell').classList.remove('hidden')}
+function showAuthGate(){document.getElementById('appShell').classList.add('hidden');document.getElementById('authGate').classList.remove('hidden')}
+function updateAppGate(){if(validOneToken())showAppShell();else showAuthGate()}
+async function postOneJson(url,data){const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','User-Agent':'Dart/3.10 (dart:io)'},body:JSON.stringify(data)});const text=await response.text();let body;try{body=JSON.parse(text)}catch(e){body=text}if(!response.ok){const error=new Error('HTTP '+response.status);error.body=body;throw error}return body}
+async function postOneForm(url,data){const form=new URLSearchParams();Object.entries(data).forEach(([key,value])=>form.append(key,value==null?'':String(value)));const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Dart/3.10 (dart:io)'},body:form.toString()});const text=await response.text();let body;try{body=JSON.parse(text)}catch(e){body=text}if(!response.ok){const error=new Error('HTTP '+response.status);error.body=body;throw error}return body}
+async function loginStep1(){if(oneLoginBusy)return;pendingOneLogin=null;document.getElementById('authOtpBox').classList.add('hidden');const username=document.getElementById('authUsername').value.trim(),password=document.getElementById('authPassword').value;if(!username||!password){setAuthStatus('Vui lòng nhập username và password.','error');return}saveLoginCredentials();oneLoginBusy=true;const button=document.getElementById('authLoginBtn');button.disabled=true;setAuthStatus('Bước 1/2: đang xác thực tài khoản...');try{const response=await postOneJson(ONE_API_1,{username,password,os_type:'1',mobile_id:ONE_MOBILE_ID,device_id:ONE_DEVICE_ID});const data=response&&response.data||{},secretCode=data.secretCode;if(!secretCode){setAuthStatus('Không lấy được secretCode. Phản hồi: '+JSON.stringify(response),'error');return}pendingOneLogin={username,secretCode,ten_nv:data.ten_nv||null,sdt:data.sdt||null};document.getElementById('authOtpBox').classList.remove('hidden');setAuthStatus('Bước 1 thành công. OTP đã được gửi. Nhập OTP để tiếp tục.'+(data.sdt?'\nSố điện thoại: '+data.sdt:''),'success')}catch(error){setAuthStatus('Lỗi bước 1: '+(error.body?JSON.stringify(error.body):error.message),'error')}finally{oneLoginBusy=false;button.disabled=false}}
+async function loginStep2(){if(oneLoginBusy)return;if(!pendingOneLogin){setAuthStatus('Chưa hoàn tất bước đăng nhập đầu tiên.','error');return}const otp=document.getElementById('authOtp').value.trim();if(!otp){setAuthStatus('Vui lòng nhập OTP.','error');return}oneLoginBusy=true;const button=document.getElementById('authOtpBtn');button.disabled=true;setAuthStatus('Bước 2/2: đang xác thực OTP...');const pending=pendingOneLogin;try{const response=await postOneForm(ONE_API_2,{grant_type:'password',client_id:'clientapp',client_secret:'password',secretCode:pending.secretCode,otp});if(!response||!response.access_token){setAuthStatus('OTP chưa được chấp nhận. Phản hồi: '+JSON.stringify(response),'error');return}const expires=Number(response.expires_in||0);const token={username:pending.username,ten_nv:pending.ten_nv,sdt:pending.sdt,os_type:'1',device_id:ONE_DEVICE_ID,mobile_id:ONE_MOBILE_ID,secretCode:pending.secretCode,access_token:response.access_token,refresh_token:response.refresh_token||null,token_type:response.token_type||null,expires_in:response.expires_in||null,expires_at:expires?Date.now()/1000+expires:null,scope:response.scope||null};writeOneToken(token);pendingOneLogin=null;fetch('/api/log-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:'MODEM',username:pending.username})}).catch(()=>{});setAuthStatus('Đăng nhập thành công. Đang mở ứng dụng.','success');showAppShell()}catch(error){setAuthStatus('Lỗi xác thực OTP: '+(error.body?JSON.stringify(error.body):error.message),'error')}finally{oneLoginBusy=false;button.disabled=false}}
+function logoutApp(){clearOneToken();pendingOneLogin=null;document.getElementById('authOtpBox').classList.add('hidden');document.getElementById('authOtp').value='';restoreLoginCredentials();setAuthStatus('Đã đăng xuất. Vui lòng đăng nhập lại.');showAuthGate()}
+window.addEventListener('DOMContentLoaded',()=>{restoreLoginCredentials();document.getElementById('authUsername').addEventListener('input',saveLoginCredentials);document.getElementById('authPassword').addEventListener('input',saveLoginCredentials);updateAppGate()});
+
+const modal=document.getElementById('dialogBackdrop'),titleEl=document.getElementById('dialogTitle'),bodyEl=document.getElementById('dialogBody'),actionsEl=document.getElementById('dialogActions');
+function openDialog(title,body,actions=[]){titleEl.textContent=title;bodyEl.innerHTML='';if(typeof body==='string'){const p=document.createElement('p');p.textContent=body;bodyEl.appendChild(p)}else bodyEl.appendChild(body);actionsEl.innerHTML='';actions.forEach(([text,fn])=>{const b=document.createElement('button');b.textContent=text;b.onclick=fn;actionsEl.appendChild(b)});const close=document.createElement('button');close.textContent='Đóng';close.onclick=closeDialog;actionsEl.appendChild(close);modal.classList.add('open')}
+function closeDialog(){modal.classList.remove('open')}
+function showInfo(){let version='Không rõ';try{version=AndroidBridge.version()}catch(e){}const actions=validOneToken()?[['Đăng xuất',logoutApp]]:[];openDialog('Thông tin ứng dụng','VNPT TOOL - Android\nPhiên bản: '+version,actions)}
+function showLogs(){let value='Chưa có nhật ký.';try{value=AndroidBridge.diagnosticLog()}catch(e){value='Không đọc được nhật ký: '+e.message}const pre=document.createElement('pre');pre.textContent=value;openDialog('Nhật ký ứng dụng',pre,[['Sao chép',async()=>{try{await navigator.clipboard.writeText(pre.textContent)}catch(e){pre.focus();document.execCommand('copy')}}],['Xóa',()=>{try{AndroidBridge.clearDiagnosticLog();pre.textContent=AndroidBridge.diagnosticLog()}catch(e){pre.textContent='Không xóa được nhật ký: '+e.message}}]])}
+function checkUpdate(){try{AndroidBridge.openUpdateUrl()}catch(e){openDialog('Cập nhật','Không mở được Google Drive: '+e.message)}}
+function exitApp(){if(history.length>1)history.back();else openDialog('Thoát ứng dụng','Dùng nút Quay lại của Android để thoát.')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDialog()});
+</script>
+</body>
+</html>
