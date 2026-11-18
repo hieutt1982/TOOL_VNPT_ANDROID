@@ -3,7 +3,6 @@ package com.vnpt.tool;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
 import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
@@ -385,18 +384,6 @@ public final class WebBridge {
     @JavascriptInterface
     public void startAppUpdate() {
         Context context = webView.getContext();
-        if (Build.VERSION.SDK_INT >= 26 && !context.getPackageManager().canRequestPackageInstalls()) {
-            try {
-                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + context.getPackageName()));
-                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(settings);
-                updateStatus("Android cần quyền cài ứng dụng cho VNPT TOOL. Bật quyền rồi quay lại bấm Cập nhật.", -1, "permission");
-            } catch (Exception e) {
-                updateStatus("Không mở được cài đặt quyền cài ứng dụng: " + e.getMessage(), -1, "error");
-            }
-            return;
-        }
         if (!updateRunning.compareAndSet(false, true)) {
             updateStatus("Đang tải APK, vui lòng đợi…", -1, "downloading");
             return;
@@ -406,9 +393,9 @@ public final class WebBridge {
         executor.execute(() -> {
             try {
                 java.io.File apk = AppUpdater.download(context, this::updateStatus);
-                AppUpdater.install(context, apk);
-                diag("UPDATE", "Đã gửi APK cho Android PackageInstaller: " + apk.length() + " bytes");
-                updateStatus("APK đã tải xong. Xác nhận cài đặt trong cửa sổ Android.", 100, "installing");
+                Uri saved = AppUpdater.copyToDownloads(context, apk);
+                diag("UPDATE", "Đã tải APK và lưu vào Tải xuống để cài mới: " + saved + "; bytes=" + apk.length());
+                updateStatus("Đã tải APK mới vào Tải xuống với tên TOOL-VNPT-update.apk. Bấm nút bên dưới để mở Cài đặt và gỡ VNPT TOOL cũ. Sau khi gỡ, mở Tệp > Tải xuống > TOOL-VNPT-update.apk để cài bản mới.", 100, "reinstall_required");
             } catch (Exception e) {
                 diag("UPDATE!", Log.getStackTraceString(e));
                 updateStatus("Cập nhật thất bại: " + (e.getMessage() == null ? e.toString() : e.getMessage()), -1, "error");
@@ -430,26 +417,15 @@ public final class WebBridge {
         } catch (Exception ignored) {}
     }
 
-    void onInstallResult(Intent intent) {
-        if (intent == null) return;
-        int status = intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS,
-                android.content.pm.PackageInstaller.STATUS_FAILURE);
-        String message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
-        if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            Intent confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT);
-            if (confirmation != null) {
-                confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                webView.getContext().startActivity(confirmation);
-            }
-            return;
-        }
-        if (status == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
-            updateStatus("Cài đặt cập nhật thành công.", 100, "success");
-            diag("UPDATE", "Android xác nhận cài đặt thành công");
-        } else {
-            String detail = message == null ? "Mã lỗi " + status : message;
-            updateStatus("Android không cài được APK: " + detail, -1, "error");
-            diag("UPDATE!", "PackageInstaller status=" + status + " message=" + detail);
+    @JavascriptInterface
+    public void openAppUninstallSettings() {
+        try {
+            Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + webView.getContext().getPackageName()));
+            settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            webView.getContext().startActivity(settings);
+        } catch (Exception e) {
+            updateStatus("Không mở được Cài đặt ứng dụng: " + e.getMessage(), -1, "error");
         }
     }
 

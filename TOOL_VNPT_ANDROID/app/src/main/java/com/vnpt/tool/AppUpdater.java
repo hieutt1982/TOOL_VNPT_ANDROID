@@ -1,13 +1,13 @@
 package com.vnpt.tool;
 
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
+import android.content.ContentValues;
+import android.content.ContentResolver;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageInstaller;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Environment;
+import android.provider.MediaStore;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -22,12 +22,11 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
-/** Downloads the public Drive APK and hands it to Android's package installer. */
+/** Downloads the public Drive APK and saves a persistent copy in Downloads. */
 final class AppUpdater {
     private static final String DRIVE_FILE_ID = "1PYwhZWaJOaSSDyHLXDtNytJKTcCdmmxB";
     private static final long MAX_APK_BYTES = 150L * 1024L * 1024L;
     private static final Pattern DRIVE_UUID = Pattern.compile("name=\\\"uuid\\\"\\s+value=\\\"([^\\\"]+)\\\"", Pattern.CASE_INSENSITIVE);
-    static final String INSTALL_RESULT_ACTION = "com.vnpt.tool.APP_UPDATE_INSTALL_RESULT";
 
     interface Progress {
         void update(String message, int percent, String state);
@@ -93,37 +92,39 @@ final class AppUpdater {
                     out.flush();
                 }
                 validateApk(context, apk);
-                progress.update("Tải APK xong. Đang mở trình cài đặt…", 100, "installing");
+                progress.update("Tải APK xong. Đang lưu vào Tải xuống…", 100, "saving");
                 return apk;
             }
         }
         throw new java.io.IOException("Không lấy được file APK từ Google Drive sau nhiều lần chuyển hướng.");
     }
 
-    static void install(Context context, File apk) throws Exception {
-        if (Build.VERSION.SDK_INT >= 26 && !context.getPackageManager().canRequestPackageInstalls()) {
-            throw new SecurityException("Android chưa cho phép VNPT TOOL cài ứng dụng. Hãy bật quyền ‘Cài ứng dụng không rõ nguồn gốc’ rồi bấm Cập nhật lại.");
+    static Uri copyToDownloads(Context context, File apk) throws Exception {
+        if (Build.VERSION.SDK_INT < 29) {
+            throw new java.io.IOException("Lưu APK vào thư mục Tải xuống cần Android 10 trở lên.");
         }
-        PackageInstaller installer = context.getPackageManager().getPackageInstaller();
-        PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-        params.setAppPackageName(context.getPackageName());
-        params.setSize(apk.length());
-        int sessionId = installer.createSession(params);
-        try (PackageInstaller.Session session = installer.openSession(sessionId)) {
-            try (InputStream in = new FileInputStream(apk);
-                 OutputStream out = session.openWrite("base.apk", 0, apk.length())) {
+        ContentResolver resolver = context.getContentResolver();
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.MediaColumns.DISPLAY_NAME, "TOOL-VNPT-update.apk");
+        values.put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.android.package-archive");
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+        Uri destination = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+        if (destination == null) throw new java.io.IOException("Không tạo được file APK trong thư mục Tải xuống.");
+        try {
+            try (InputStream in = new FileInputStream(apk); OutputStream out = resolver.openOutputStream(destination, "w")) {
+                if (out == null) throw new java.io.IOException("Không mở được file APK trong Tải xuống.");
                 byte[] buffer = new byte[64 * 1024];
                 int read;
                 while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
-                session.fsync(out);
+                out.flush();
             }
-            Intent callback = new Intent(context, MainActivity.class).setAction(INSTALL_RESULT_ACTION);
-            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
-            PendingIntent pending = PendingIntent.getActivity(context, sessionId, callback, flags);
-            session.commit(pending.getIntentSender());
+            ContentValues ready = new ContentValues();
+            ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            resolver.update(destination, ready, null, null);
+            return destination;
         } catch (Exception e) {
-            try { installer.abandonSession(sessionId); } catch (Exception ignored) {}
+            resolver.delete(destination, null, null);
             throw e;
         }
     }
