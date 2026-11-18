@@ -66,7 +66,7 @@ jobs:
           data = {
               "versionCode": int(match.group(1)),
               "versionName": match.group(2),
-              "apkFileId": "",
+              "apkFileId": "1PYwhZWaJOaSSDyHLXDtNytJKTcCdmmxB",
               "description": "Cập nhật phiên bản mới"
           }
 
