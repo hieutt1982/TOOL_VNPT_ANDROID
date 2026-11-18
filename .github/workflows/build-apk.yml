@@ -41,6 +41,11 @@ jobs:
           echo "APP_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
           echo "APP_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
 
+          if ! [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "versionCode không hợp lệ: $VERSION_CODE"
+            exit 1
+          fi
+
           echo "APK version: $VERSION_NAME ($VERSION_CODE)"
 
       - name: Build debug APK
@@ -102,8 +107,8 @@ jobs:
               f.write(
                   "VERSION NAME: " + match.group(2) + "\n"
                   "VERSION CODE: " + match.group(1) + "\n"
-                  "APK: app-debug.apk\\n"
-                  "Sau khi upload APK lên Google Drive, cập nhật apkFileId trong version.json.\\n"
+                  "APK: app-debug.apk\n"
+                  "Google Drive file ID đã được cấu hình trong version.json.\n"
               )
           PY
 
