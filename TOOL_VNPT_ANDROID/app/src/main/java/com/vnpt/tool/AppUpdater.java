@@ -109,13 +109,14 @@ final class AppUpdater {
         params.setAppPackageName(context.getPackageName());
         params.setSize(apk.length());
         int sessionId = installer.createSession(params);
-        try (PackageInstaller.Session session = installer.openSession(sessionId);
-             InputStream in = new FileInputStream(apk);
-             OutputStream out = session.openWrite("base.apk", 0, apk.length())) {
-            byte[] buffer = new byte[64 * 1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
-            session.fsync(out);
+        try (PackageInstaller.Session session = installer.openSession(sessionId)) {
+            try (InputStream in = new FileInputStream(apk);
+                 OutputStream out = session.openWrite("base.apk", 0, apk.length())) {
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                session.fsync(out);
+            }
             Intent callback = new Intent(context, MainActivity.class).setAction(INSTALL_RESULT_ACTION);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
             if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
