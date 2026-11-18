@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
@@ -43,6 +44,8 @@ public final class WebBridge {
     private final WebView webView;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean updateCheckRunning = new AtomicBoolean(false);
+    private volatile String latestUpdateApkFileId = "";
     private static final String DIAG_FILE = "vnpt_diagnostic.log";
     private static final Object LOG_LOCK = new Object();
     private static final int MAX_LOG_CHARS = 900000;
@@ -309,8 +312,52 @@ public final class WebBridge {
     }
 
     @JavascriptInterface
+    public void checkUpdateVersion() {
+        if (!updateCheckRunning.compareAndSet(false, true)) return;
+        diag("UPDATE", "Bắt đầu kiểm tra versionCode của APK trên Google Drive");
+        executor.execute(() -> {
+            JSONObject result = new JSONObject();
+            try {
+                AppUpdater.VersionResult version = AppUpdater.check(webView.getContext(),
+                        message -> updateCheckStatus(message));
+                result.put("ok", true);
+                result.put("hasUpdate", version.hasUpdate());
+                result.put("installedCode", version.installedCode);
+                result.put("installedName", version.installedName == null ? "" : version.installedName);
+                result.put("driveCode", version.driveCode);
+                result.put("driveName", version.driveName == null ? "" : version.driveName);
+                result.put("description", version.description == null ? "" : version.description);
+                latestUpdateApkFileId = version.apkFileId;
+                result.put("apkReady", !latestUpdateApkFileId.isEmpty());
+                diag("UPDATE", "Đọc version.json thành công. Đang cài=" + version.installedName + " (" + version.installedCode + "); JSON=" + version.driveName + " (" + version.driveCode + "); APK ID=" + version.apkFileId);
+            } catch (Exception e) {
+                try { result.put("ok", false); result.put("error", e.getMessage() == null ? e.toString() : e.getMessage()); }
+                catch (Exception ignored) {}
+                diag("UPDATE!", Log.getStackTraceString(e));
+            } finally {
+                updateCheckRunning.set(false);
+            }
+            String payload = JSONObject.quote(result.toString());
+            mainHandler.post(() -> webView.evaluateJavascript(
+                    "window.onUpdateVersionChecked && window.onUpdateVersionChecked(" + payload + ")", null));
+        });
+    }
+
+    private void updateCheckStatus(String message) {
+        String payload = JSONObject.quote(message);
+        mainHandler.post(() -> webView.evaluateJavascript(
+                "window.onUpdateVersionStatus && window.onUpdateVersionStatus(" + payload + ")", null));
+        diag("UPDATE", message);
+    }
+
+    @JavascriptInterface
     public void openUpdateUrl() {
-        String url = "https://drive.google.com/file/d/1PYwhZWaJOaSSDyHLXDtNytJKTcCdmmxB/view?usp=sharing";
+        String apkId = latestUpdateApkFileId;
+        if (apkId == null || apkId.isEmpty()) {
+            diag("UPDATE!", "Chưa có ID APK. Hãy kiểm tra cập nhật trước.");
+            return;
+        }
+        String url = "https://drive.google.com/file/d/" + Uri.encode(apkId) + "/view?usp=sharing";
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

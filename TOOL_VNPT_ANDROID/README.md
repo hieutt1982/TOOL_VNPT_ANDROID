@@ -1,25 +1,43 @@
-# TOOL VNPT Android
+# VNPT TOOL Android - kiểm tra cập nhật bằng version.json
 
-Ứng dụng Android dùng **WebView + Java Bridge + OkHttp**, không khởi chạy Node.js, không mở HTTP server cục bộ, không cần Termux/Python.
+## Cấu hình Google Drive
 
-## Các module
-- **NS_V1, NS_V2, G040H:** giữ nguyên logic nghiệp vụ JavaScript được cung cấp; logic chạy trong WebView. `web-runtime.js` thay các API Node cần thiết cho luồng hiện tại (HTTP route nội bộ, Buffer, process, https request). Mọi kết nối HTTPS ra modem được chuyển qua `AndroidBridge` sang Java/OkHttp.
-- **OneLink:** giữ giao diện HTML gốc; các route `/api/*` được chuyển trực tiếp sang Java/OkHttp trong `WebBridge`.
+Ứng dụng đọc thông tin phiên bản từ file `version.json` có ID đã cấu hình trong `AppUpdater.java`:
 
-## HTTPS modem
-- Chỉ bỏ xác minh chứng chỉ tự ký khi đích là IPv4 private/local (10/8, 172.16/12, 192.168/16, 169.254/16, loopback).
-- Các host VNPT/OneLink dùng client HTTPS bình thường, vẫn xác minh chứng chỉ.
-- Việc bỏ xác minh TLS trên mạng nội bộ vẫn có rủi ro giả mạo thiết bị; chỉ dùng với modem tin cậy trong mạng quản trị.
+`1i5zATdaEu-cVQsKRRe5n2EhjXTAtTjcK`
 
-## Build APK bằng GitHub Actions
-1. Upload toàn bộ thư mục dự án này lên repository GitHub.
-2. Mở tab **Actions**.
-3. Chọn workflow **Build TOOL VNPT APK** → **Run workflow**.
-4. Tải artifact `TOOL-VNPT-debug-apk` sau khi workflow hoàn tất.
+Nội dung file JSON phải đúng cấu trúc:
 
-## Kiểm tra đã thực hiện trong môi trường tạo mã
-- Đã kiểm tra cú pháp JavaScript của 3 backend và runtime.
-- Đã chạy thử route trang chủ và `/api/status` của NS_V1, NS_V2, G040H trong môi trường giả lập WebView: đều trả HTTP 200.
-- Đã kiểm tra ZIP đầu vào và giữ nguyên logic nguồn của 3 backend.
-- Chưa thể kiểm thử đăng nhập/cấu hình trên modem thật trong môi trường này; cần kiểm tra trên thiết bị và mạng modem thực tế trước khi sử dụng tại khách hàng.
-- Chưa biên dịch APK tại máy tạo mã vì môi trường không có Gradle/Android SDK; GitHub Actions được cấu hình để build.
+```json
+{
+  "versionCode": 4,
+  "versionName": "1.2.0",
+  "apkFileId": "ID_FILE_APK_TREN_GOOGLE_DRIVE",
+  "description": "Cập nhật chức năng mới"
+}
+```
+
+- `versionCode`: số nguyên tăng dần, phải lớn hơn versionCode đang cài để báo có bản mới.
+- `versionName`: tên phiên bản hiển thị.
+- `apkFileId`: ID của file APK mới trên Google Drive.
+- `description`: mô tả cập nhật, có thể để chuỗi rỗng.
+
+Cả `version.json` và APK cần bật chia sẻ **Bất kỳ ai có đường liên kết** (vai trò Người xem).
+
+## Mỗi lần phát hành APK mới
+
+1. Biên dịch APK với `versionCode` lớn hơn bản trước.
+2. Tải APK lên Drive và lấy ID của file APK.
+3. Cập nhật `version.json` với `versionCode`, `versionName`, `apkFileId` mới.
+4. Giữ nguyên file JSON (không xóa tạo file khác) để ID JSON không đổi.
+
+## Hành vi nút CẬP NHẬT
+
+- Khi nhấn nút, ứng dụng chỉ tải `version.json` (không tải APK để kiểm tra).
+- So sánh `versionCode` trong JSON với phiên bản đang cài.
+- Nếu có bản mới, nút **Mở Drive tải APK** mở đúng file APK được khai báo trong `apkFileId`.
+- Bản sửa này giữ cơ chế tải/cài APK hiện tại của dự án; không tự động cài APK.
+
+## Lưu ý
+
+Chưa biên dịch hoặc kiểm thử trên thiết bị Android trong môi trường này. Hãy build và thử với một APK có versionCode lớn hơn bản đang cài.
