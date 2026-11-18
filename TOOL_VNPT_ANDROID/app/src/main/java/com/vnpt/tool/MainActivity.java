@@ -1,6 +1,7 @@
 package com.vnpt.tool;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -46,6 +47,19 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(bridge, "AndroidBridge");
         setContentView(web);
         web.loadUrl("file:///android_asset/index.html");
+        handleUpdateIntent(getIntent());
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleUpdateIntent(intent);
+    }
+
+    private void handleUpdateIntent(Intent intent) {
+        if (intent != null && AppUpdater.INSTALL_RESULT_ACTION.equals(intent.getAction()) && bridge != null) {
+            bridge.onInstallResult(intent);
+        }
     }
 
     @Override public void onBackPressed() {

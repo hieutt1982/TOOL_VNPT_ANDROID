@@ -1,6 +1,10 @@
 package com.vnpt.tool;
 
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.JavascriptInterface;
@@ -22,6 +26,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
@@ -41,6 +46,7 @@ public final class WebBridge {
     private final WebView webView;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean updateRunning = new AtomicBoolean(false);
     private static final String DIAG_FILE = "vnpt_diagnostic.log";
     private static final Object LOG_LOCK = new Object();
     private static final int MAX_LOG_CHARS = 900000;
@@ -374,6 +380,77 @@ public final class WebBridge {
     @JavascriptInterface
     public void logFromJs(String level, String message) {
         diag("JS-" + (level == null ? "LOG" : level), message == null ? "" : message);
+    }
+
+    @JavascriptInterface
+    public void startAppUpdate() {
+        Context context = webView.getContext();
+        if (Build.VERSION.SDK_INT >= 26 && !context.getPackageManager().canRequestPackageInstalls()) {
+            try {
+                Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + context.getPackageName()));
+                settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(settings);
+                updateStatus("Android cần quyền cài ứng dụng cho VNPT TOOL. Bật quyền rồi quay lại bấm Cập nhật.", -1, "permission");
+            } catch (Exception e) {
+                updateStatus("Không mở được cài đặt quyền cài ứng dụng: " + e.getMessage(), -1, "error");
+            }
+            return;
+        }
+        if (!updateRunning.compareAndSet(false, true)) {
+            updateStatus("Đang tải APK, vui lòng đợi…", -1, "downloading");
+            return;
+        }
+        updateStatus("Đang kết nối Google Drive…", 0, "downloading");
+        diag("UPDATE", "Người dùng bắt đầu tải APK từ Google Drive");
+        executor.execute(() -> {
+            try {
+                java.io.File apk = AppUpdater.download(context, this::updateStatus);
+                AppUpdater.install(context, apk);
+                diag("UPDATE", "Đã gửi APK cho Android PackageInstaller: " + apk.length() + " bytes");
+                updateStatus("APK đã tải xong. Xác nhận cài đặt trong cửa sổ Android.", 100, "installing");
+            } catch (Exception e) {
+                diag("UPDATE!", Log.getStackTraceString(e));
+                updateStatus("Cập nhật thất bại: " + (e.getMessage() == null ? e.toString() : e.getMessage()), -1, "error");
+            } finally {
+                updateRunning.set(false);
+            }
+        });
+    }
+
+    void updateStatus(String message, int percent, String state) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("message", message);
+            payload.put("percent", percent);
+            payload.put("state", state);
+            String script = "window.onAppUpdateStatus && window.onAppUpdateStatus(" + payload.toString() + ")";
+            mainHandler.post(() -> { if (webView != null) webView.evaluateJavascript(script, null); });
+            diag("UPDATE", message + (percent >= 0 ? " (" + percent + "%)" : ""));
+        } catch (Exception ignored) {}
+    }
+
+    void onInstallResult(Intent intent) {
+        if (intent == null) return;
+        int status = intent.getIntExtra(android.content.pm.PackageInstaller.EXTRA_STATUS,
+                android.content.pm.PackageInstaller.STATUS_FAILURE);
+        String message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
+        if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            Intent confirmation = intent.getParcelableExtra(android.content.pm.PackageInstaller.EXTRA_INTENT);
+            if (confirmation != null) {
+                confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                webView.getContext().startActivity(confirmation);
+            }
+            return;
+        }
+        if (status == android.content.pm.PackageInstaller.STATUS_SUCCESS) {
+            updateStatus("Cài đặt cập nhật thành công.", 100, "success");
+            diag("UPDATE", "Android xác nhận cài đặt thành công");
+        } else {
+            String detail = message == null ? "Mã lỗi " + status : message;
+            updateStatus("Android không cài được APK: " + detail, -1, "error");
+            diag("UPDATE!", "PackageInstaller status=" + status + " message=" + detail);
+        }
     }
 
     public void close() {
