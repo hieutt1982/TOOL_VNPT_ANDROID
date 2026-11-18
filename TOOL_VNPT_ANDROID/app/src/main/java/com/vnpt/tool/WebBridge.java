@@ -436,7 +436,7 @@ public final class WebBridge {
                 android.content.pm.PackageInstaller.STATUS_FAILURE);
         String message = intent.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE);
         if (status == android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            Intent confirmation = intent.getParcelableExtra(android.content.pm.PackageInstaller.EXTRA_INTENT);
+            Intent confirmation = intent.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirmation != null) {
                 confirmation.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 webView.getContext().startActivity(confirmation);
