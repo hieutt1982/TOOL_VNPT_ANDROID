@@ -170,8 +170,12 @@ async function detectAndOpenModem(event){
     status.textContent='Đang kiểm tra trang đăng nhập…';
     const login=await window.nativeHttps(base+'/cgi-bin/login.asp',{method:'GET',modem:true,headers:{...browserHeaders,'Referer':base+'/','Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'same-origin'}});
     const loginText=String(await login.text());
-    if(/iGate\s+GW020-H/i.test(loginText)){
-      status.textContent='Đã nhận diện G040H (iGate GW020-H). Đang mở trang cấu hình…';
+    // Nhận diện các biến thể iGate thuộc bộ xử lý G040H.
+    // Một số modem trả về GW020-H, một số modem trả về GW040-H.
+    const igateMatch=loginText.match(/iGate\s+(GW(?:020|040)-H)\b/i);
+    if(igateMatch){
+      const detectedModel=igateMatch[1].toUpperCase();
+      status.textContent='Đã nhận diện G040H ('+detectedModel+'). Đang mở trang cấu hình…';
       location.href='module.html?m=g040h';
       return;
     }
