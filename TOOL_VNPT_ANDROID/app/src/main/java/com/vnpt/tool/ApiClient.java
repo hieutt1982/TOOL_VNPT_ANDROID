@@ -91,11 +91,7 @@ public final class ApiClient {
                 .connectTimeout(15, TimeUnit.SECONDS).readTimeout(35, TimeUnit.SECONDS)
                 .writeTimeout(35, TimeUnit.SECONDS).followRedirects(false)
                 .followSslRedirects(false);
-            // DIAGNOSTIC TEST: keep modem client on Android's default network
-            // instead of pinning its sockets/DNS to the supplied Wi-Fi Network.
-            // VNPT/OneLink clients remain explicitly pinned to cellular in their
-            // respective methods; only modem traffic is changed for this test.
-            modem = builder.build();
+            modem = onNetwork(builder, network).build();
         }
         return modem;
     }
