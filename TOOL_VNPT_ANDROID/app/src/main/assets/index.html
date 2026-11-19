@@ -159,6 +159,20 @@ async function detectAndOpenModem(event){
       'sec-ch-ua-platform':'\"Android\"',
       'Upgrade-Insecure-Requests':'1'
     };
+    // Thử truy cập thẳng trang đăng nhập trước để kiểm tra iGate GW020-H/GW040-H.
+    // Nếu chưa nhận diện được iGate thì quay lại luồng cũ để không thay đổi nhận diện NS V1/NS V2.
+    status.textContent='Đang thử truy cập trực tiếp trang đăng nhập modem…';
+    const directLogin=await window.nativeHttps(base+'/cgi-bin/login.asp',{method:'GET',modem:true,headers:{...browserHeaders,'Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'none','Sec-Fetch-User':'?1','Cache-Control':'max-age=0'}});
+    const directLoginText=String(await directLogin.text());
+    const directIgateMatch=directLoginText.match(/iGate\s+(GW(?:020|040)-H)\b/i);
+    if(directIgateMatch){
+      const detectedModel=directIgateMatch[1].toUpperCase();
+      status.textContent='Đã nhận diện modem '+detectedModel+' qua truy cập trực tiếp. Đang mở trang cấu hình…';
+      location.href='module.html?m=g040h';
+      return;
+    }
+
+    // Không phải trang iGate hoặc modem chưa trả nội dung đăng nhập: giữ nguyên luồng nhận diện cũ.
     status.textContent='Đang đọc trang chủ modem…';
     let root=await window.nativeHttps(base+'/',{method:'GET',modem:true,headers:{...browserHeaders,'Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'none','Sec-Fetch-User':'?1','Cache-Control':'max-age=0'}});
     let rootText=String(await root.text());
