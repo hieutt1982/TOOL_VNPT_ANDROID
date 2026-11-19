@@ -90,7 +90,8 @@ public final class WebBridge {
                 }
                 // Force each modem exchange to finish its TCP/TLS socket. The
                 // modem may reboot or close keep-alive sockets after a POST.
-                if (modem) requestBuilder.header("Connection", "close");
+                //if (modem) requestBuilder.header("Connection", "close");
+                if (modem) requestBuilder.header("Connection", "keep-alive");
 
                 if ("GET".equals(httpMethod) || "HEAD".equals(httpMethod)) {
                     requestBuilder.method(httpMethod, null);
