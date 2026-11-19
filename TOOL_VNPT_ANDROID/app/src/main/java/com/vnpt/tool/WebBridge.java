@@ -3,6 +3,7 @@ package com.vnpt.tool;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.net.Network;
 import android.os.Handler;
 import android.os.Looper;
 import android.webkit.JavascriptInterface;
@@ -42,6 +43,7 @@ public final class WebBridge {
     private static final String MODEM_KEY = "FVcLoGQybQAkTn3qR1WcEVAiLCOHxwEp";
 
     private final WebView webView;
+    private final NetworkRouter networkRouter;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean updateCheckRunning = new AtomicBoolean(false);
@@ -50,8 +52,9 @@ public final class WebBridge {
     private static final Object LOG_LOCK = new Object();
     private static final int MAX_LOG_CHARS = 900000;
 
-    public WebBridge(WebView webView) {
+    public WebBridge(WebView webView, NetworkRouter networkRouter) {
         this.webView = webView;
+        this.networkRouter = networkRouter;
         diag("APP", "WebBridge khởi tạo; version=" + version());
     }
 
@@ -99,7 +102,15 @@ public final class WebBridge {
                     requestBuilder.method(httpMethod, requestBody);
                 }
 
-                okhttp3.OkHttpClient client = modem ? ApiClient.modem() : ApiClient.normal();
+                // Modem LAN requests are pinned to Wi-Fi; all public VNPT requests
+                // are pinned to cellular, regardless of Android's default network.
+                Network selectedNetwork = modem
+                        ? networkRouter.awaitWifiNetwork()
+                        : networkRouter.awaitCellularNetwork();
+                okhttp3.OkHttpClient client = modem
+                        ? ApiClient.modem(selectedNetwork)
+                        : ApiClient.normal(selectedNetwork);
+                diag("NET", (modem ? "MODEM/WIFI" : "VNPT/4G") + " network=" + selectedNetwork);
                 try (Response response = client.newCall(requestBuilder.build()).execute()) {
                     String responseText = response.body() == null ? "" : response.body().string();
                     result.put("ok", true);
@@ -218,7 +229,9 @@ public final class WebBridge {
                     throw new IOException("API OneLink chưa được hỗ trợ: " + httpMethod + " " + route);
                 }
 
-                try (Response response = ApiClient.oneLink().newCall(upstreamRequest.build()).execute()) {
+                Network cellular = networkRouter.awaitCellularNetwork();
+                diag("NET", "ONELINK/4G network=" + cellular);
+                try (Response response = ApiClient.oneLink(cellular).newCall(upstreamRequest.build()).execute()) {
                     String responseText = response.body() == null ? "" : response.body().string();
                     result.put("ok", true);
                     result.put("status", response.code());
@@ -318,7 +331,7 @@ public final class WebBridge {
         executor.execute(() -> {
             JSONObject result = new JSONObject();
             try {
-                AppUpdater.VersionResult version = AppUpdater.check(webView.getContext(),
+                AppUpdater.VersionResult version = AppUpdater.check(webView.getContext(), networkRouter,
                         message -> updateCheckStatus(message));
                 result.put("ok", true);
                 result.put("hasUpdate", version.hasUpdate());

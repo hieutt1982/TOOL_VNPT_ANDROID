@@ -3,6 +3,8 @@ package com.vnpt.tool;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import android.net.Network;
+import java.net.UnknownHostException;
 import javax.net.ssl.*;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
@@ -15,6 +17,7 @@ import okhttp3.Protocol;
 
 public final class ApiClient {
     private static OkHttpClient normal, modem, oneLink;
+    private static Network normalNetwork, modemNetwork, oneLinkNetwork;
     private static final CookieJar COOKIE_JAR = new CookieJar() {
         private final Map<String, Map<String, Cookie>> store = new ConcurrentHashMap<>();
         @Override public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
@@ -38,6 +41,60 @@ public final class ApiClient {
         }
     };
     private ApiClient() {}
+
+    /** DNS and sockets are both resolved/routed through the supplied Android Network. */
+    private static OkHttpClient.Builder onNetwork(OkHttpClient.Builder builder, Network network) {
+        if (network == null) return builder;
+        return builder.socketFactory(network.getSocketFactory()).dns(host -> {
+            try { return Arrays.asList(network.getAllByName(host)); }
+            catch (UnknownHostException e) { throw e; }
+        });
+    }
+
+    public static synchronized OkHttpClient normal(Network network) {
+        if (normal == null || normalNetwork == null || !normalNetwork.equals(network)) {
+            normalNetwork = network;
+            normal = onNetwork(new OkHttpClient.Builder()
+                .cookieJar(COOKIE_JAR).connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(45, TimeUnit.SECONDS).writeTimeout(45, TimeUnit.SECONDS)
+                .followRedirects(false).followSslRedirects(false), network).build();
+        }
+        return normal;
+    }
+
+    public static synchronized OkHttpClient oneLink(Network network) {
+        if (oneLink == null || oneLinkNetwork == null || !oneLinkNetwork.equals(network)) {
+            oneLinkNetwork = network;
+            oneLink = onNetwork(new OkHttpClient.Builder()
+                .protocols(Collections.singletonList(Protocol.HTTP_1_1))
+                .connectTimeout(20, TimeUnit.SECONDS).readTimeout(45, TimeUnit.SECONDS)
+                .writeTimeout(45, TimeUnit.SECONDS).followRedirects(false)
+                .followSslRedirects(false), network).build();
+        }
+        return oneLink;
+    }
+
+    public static synchronized OkHttpClient modem(Network network) throws Exception {
+        if (modem == null || modemNetwork == null || !modemNetwork.equals(network)) {
+            modemNetwork = network;
+            X509TrustManager tm = new X509TrustManager() {
+                public void checkClientTrusted(X509Certificate[] c, String a) {}
+                public void checkServerTrusted(X509Certificate[] c, String a) {}
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+            };
+            SSLContext ssl = SSLContext.getInstance("TLS");
+            ssl.init(null, new TrustManager[]{tm}, new SecureRandom());
+            OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .sslSocketFactory(ssl.getSocketFactory(), tm)
+                .hostnameVerifier((host, session) -> isPrivateModemHost(host))
+                .connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+                .connectTimeout(15, TimeUnit.SECONDS).readTimeout(35, TimeUnit.SECONDS)
+                .writeTimeout(35, TimeUnit.SECONDS).followRedirects(false)
+                .followSslRedirects(false);
+            modem = onNetwork(builder, network).build();
+        }
+        return modem;
+    }
 
     public static synchronized OkHttpClient normal() {
         if (normal == null) normal = new OkHttpClient.Builder()

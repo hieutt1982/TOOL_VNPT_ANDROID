@@ -11,6 +11,7 @@ import android.webkit.ConsoleMessage;
 public class MainActivity extends Activity {
     private WebView web;
     private WebBridge bridge;
+    private NetworkRouter networkRouter;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -42,7 +43,9 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        bridge = new WebBridge(web);
+        networkRouter = new NetworkRouter(this);
+        networkRouter.start();
+        bridge = new WebBridge(web, networkRouter);
         web.addJavascriptInterface(bridge, "AndroidBridge");
         setContentView(web);
         web.loadUrl("file:///android_asset/index.html");
@@ -55,6 +58,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (bridge != null) bridge.close();
+        if (networkRouter != null) networkRouter.close();
         if (web != null) { web.stopLoading(); web.removeJavascriptInterface("AndroidBridge"); web.destroy(); }
         super.onDestroy();
     }

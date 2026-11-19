@@ -41,3 +41,14 @@ Cả `version.json` và APK cần bật chia sẻ **Bất kỳ ai có đường 
 ## Lưu ý
 
 Chưa biên dịch hoặc kiểm thử trên thiết bị Android trong môi trường này. Hãy build và thử với một APK có versionCode lớn hơn bản đang cài.
+
+
+## Phân luồng Wi-Fi modem và 4G (bản cập nhật)
+
+- `NetworkRouter` đăng ký theo dõi Wi-Fi mà không yêu cầu Wi-Fi phải có Internet, đồng thời yêu cầu một mạng di động có Internet.
+- Các request trực tiếp đến IP modem (`modem=true`) được gắn với `Network` Wi-Fi.
+- Các request HTTPS VNPT và OneLink được gắn với `Network` di động (4G).
+- DNS cũng được phân giải trên đúng `Network`, tránh trường hợp socket đi 4G nhưng DNS lại theo mạng mặc định Wi-Fi.
+- Bổ sung quyền `ACCESS_NETWORK_STATE` và `CHANGE_NETWORK_STATE`.
+
+Lưu ý kiểm thử: cần build bằng Android SDK/Gradle và thử trên thiết bị thật. Khi thử, kết nối Wi-Fi modem không có Internet, bật dữ liệu di động, sau đó xác nhận API modem truy cập được qua Wi-Fi và API VNPT trả dữ liệu qua 4G. Không thể xác nhận hành vi của từng firmware Android chỉ bằng kiểm tra mã nguồn.

@@ -45,14 +45,14 @@ final class AppUpdater {
 
     private AppUpdater() {}
 
-    static VersionResult check(Context context, Progress progress) throws Exception {
+    static VersionResult check(Context context, NetworkRouter networkRouter, Progress progress) throws Exception {
         progress.update("Đang đọc version.json trên Google Drive…");
 
         PackageManager pm = context.getPackageManager();
         PackageInfo installed = pm.getPackageInfo(context.getPackageName(), 0);
         long installedCode = versionCode(installed);
 
-        JSONObject json = downloadVersionJson();
+        JSONObject json = downloadVersionJson(networkRouter);
         long remoteCode = json.getLong("versionCode");
         String remoteName = json.optString("versionName", String.valueOf(remoteCode));
         String apkFileId = json.optString("apkFileId", "").trim();
@@ -72,22 +72,23 @@ final class AppUpdater {
         return Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
     }
 
-    private static JSONObject downloadVersionJson() throws Exception {
+    private static JSONObject downloadVersionJson(NetworkRouter networkRouter) throws Exception {
+        android.net.Network cellular = networkRouter.awaitCellularNetwork();
+        okhttp3.OkHttpClient cellularClient = ApiClient.normal(cellular);
         HttpUrl url = new HttpUrl.Builder().scheme("https").host("drive.google.com")
                 .addPathSegment("uc")
                 .addQueryParameter("export", "download")
                 .addQueryParameter("id", VERSION_JSON_FILE_ID)
                 .build();
 
-        // ApiClient.normal() intentionally disables redirects for the rest of
-        // the app. Follow Google Drive redirects locally, only for this JSON request.
+        // Follow Google Drive redirects locally; all requests remain pinned to 4G.
         for (int attempt = 0; attempt < 6; attempt++) {
             Request request = new Request.Builder().url(url)
                     .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
                     .header("Accept", "application/json,text/plain,*/*")
                     .get().build();
 
-            try (Response response = ApiClient.normal().newCall(request).execute()) {
+            try (Response response = cellularClient.newCall(request).execute()) {
                 int code = response.code();
                 if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
                     String location = response.header("Location");
