@@ -95,9 +95,7 @@ main{width:min(100%,1000px);margin:0 auto;padding:30px 20px 12px}
 </header>
 <main>
   <section class="products" aria-label="Chọn chức năng modem">
-    <a class="product" href="module.html?m=nsv1"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#f8fbff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#1767aa" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL NS V1</h2><p>Cấu hình modem qua WebView<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
-    <a class="product green" href="module.html?m=nsv2"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#f8fbff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#0f947c" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL NS V2</h2><p>Cấu hình modem qua WebView<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
-    <a class="product orange" href="module.html?m=g040h"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#fff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#c97000" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>MODEM LOCAL G040H</h2><p>Cấu hình modem G040H<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
+    <a class="product" href="#" onclick="detectAndOpenModem(event)"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M40 43a29 29 0 0 1 40 0M49 53a16 16 0 0 1 22 0M57 62a5 5 0 0 1 6 0" stroke="white" stroke-width="7" stroke-linecap="round"/><path d="M20 72h80v25H20zM27 71V55m66 17V55" fill="#f8fbff" stroke="white" stroke-width="5" stroke-linejoin="round"/><path d="M32 86h24" stroke="#1767aa" stroke-width="5" stroke-linecap="round"/><circle cx="78" cy="86" r="5" fill="#ffd11a"/><circle cx="93" cy="86" r="5" fill="#ff9b18"/></svg></div><div class="product-copy"><h2>CẤU HÌNH MODEM</h2><p>Tự động nhận diện NS V1, NS V2, G040H<br>(HTTPS, Java + OkHttp)</p></div><span class="arrow">›</span></a>
     <a class="product purple" href="onelink/onelink.html"><div class="product-icon"><svg viewBox="0 0 120 120" fill="none" aria-hidden="true"><path d="M30 45a19 19 0 0 1 19-19c8 0 14 5 17 12 3-5 8-8 15-8 12 0 21 9 21 21 8 2 13 9 13 17 0 10-8 18-18 18H35c-11 0-20-9-20-20 0-10 6-18 15-21z" stroke="white" stroke-width="5"/><path d="M37 72h48v30H37z" fill="#fff"/><path d="M60 77v18m0-18-6 6m6-6 6 6M60 97v-7m0 0-6 6m6-6 6 6" stroke="#8b45c6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 105h62" stroke="white" stroke-width="5" stroke-linecap="round"/></svg></div><div class="product-copy"><h2>MODEM REMOTE</h2><p>Quản lý &amp; cấu hình modem từ xa<br>(OneLink / API VNPT)</p></div><span class="arrow">›</span></a>
   </section>
   <section class="actions" aria-label="Tiện ích">
@@ -136,6 +134,48 @@ window.addEventListener('DOMContentLoaded',()=>{restoreLoginCredentials();docume
 const modal=document.getElementById('dialogBackdrop'),titleEl=document.getElementById('dialogTitle'),bodyEl=document.getElementById('dialogBody'),actionsEl=document.getElementById('dialogActions');
 function openDialog(title,body,actions=[]){titleEl.textContent=title;bodyEl.innerHTML='';if(typeof body==='string'){const p=document.createElement('p');p.textContent=body;bodyEl.appendChild(p)}else bodyEl.appendChild(body);actionsEl.innerHTML='';actions.forEach(([text,fn])=>{const b=document.createElement('button');b.textContent=text;b.onclick=fn;actionsEl.appendChild(b)});const close=document.createElement('button');close.textContent='Đóng';close.onclick=closeDialog;actionsEl.appendChild(close);modal.classList.add('open')}
 function closeDialog(){modal.classList.remove('open')}
+
+// Nhận diện modem bằng GET đọc trang đăng nhập; không gửi mật khẩu và không thay đổi cấu hình.
+let modemDetectBusy=false;
+async function detectAndOpenModem(event){
+  if(event) event.preventDefault();
+  if(modemDetectBusy) return;
+  modemDetectBusy=true;
+  const box=document.createElement('div');
+  const status=document.createElement('p');
+  status.textContent='Đang kiểm tra modem tại 192.168.1.1…';
+  box.appendChild(status);
+  openDialog('Nhận diện modem',box);
+  try{
+    if(typeof window.nativeHttps!=='function') throw new Error('Không tìm thấy kết nối HTTPS nội bộ của Android.');
+    const base='https://192.168.1.1';
+    status.textContent='Đang đọc trang chủ modem…';
+    let root=await window.nativeHttps(base+'/',{method:'GET',modem:true,headers:{'Accept':'text/html,application/xhtml+xml,*/*'}});
+    let rootText=String(await root.text());
+    if(/AX3000\s+Wireless\s+Dual-Band\s+GPON\s+ONT/i.test(rootText) || /AX3000/i.test(rootText)){
+      status.textContent='Đã nhận diện NS V2. Đang mở trang cấu hình…';
+      location.href='module.html?m=nsv2';
+      return;
+    }
+    status.textContent='Đang kiểm tra trang đăng nhập…';
+    const login=await window.nativeHttps(base+'/cgi-bin/login.asp',{method:'GET',modem:true,headers:{'Accept':'text/html,application/xhtml+xml,*/*','Referer':base+'/'}});
+    const loginText=String(await login.text());
+    if(/iGate\s+GW020-H/i.test(loginText)){
+      status.textContent='Đã nhận diện G040H (iGate GW020-H). Đang mở trang cấu hình…';
+      location.href='module.html?m=g040h';
+      return;
+    }
+    if(/banner_GW040-NS\.gif/i.test(loginText)){
+      status.textContent='Đã nhận diện NS V1 (GW040-NS). Đang mở trang cấu hình…';
+      location.href='module.html?m=nsv1';
+      return;
+    }
+    throw new Error('Không nhận diện được modem. Hãy kiểm tra IP, kết nối Wi-Fi và thử lại.');
+  }catch(error){
+    status.textContent='Không nhận diện được modem: '+(error.message||String(error));
+    status.style.color='#9a2020';
+  }finally{modemDetectBusy=false;}
+}
 function showInfo(){let version='Không rõ';try{version=AndroidBridge.version()}catch(e){}const actions=validOneToken()?[['Đăng xuất',logoutApp]]:[];openDialog('Thông tin ứng dụng','VNPT TOOL - Android\nPhiên bản: '+version,actions)}
 function showLogs(){let value='Chưa có nhật ký.';try{value=AndroidBridge.diagnosticLog()}catch(e){value='Không đọc được nhật ký: '+e.message}const pre=document.createElement('pre');pre.textContent=value;openDialog('Nhật ký ứng dụng',pre,[['Sao chép',async()=>{try{await navigator.clipboard.writeText(pre.textContent)}catch(e){pre.focus();document.execCommand('copy')}}],['Xóa',()=>{try{AndroidBridge.clearDiagnosticLog();pre.textContent=AndroidBridge.diagnosticLog()}catch(e){pre.textContent='Không xóa được nhật ký: '+e.message}}]])}
 function checkUpdate(){const box=document.createElement('div'),status=document.createElement('p');status.textContent='Đang kiểm tra phiên bản trên Drive…';box.appendChild(status);openDialog('Kiểm tra cập nhật',box);window.onUpdateVersionStatus=function(message){status.textContent=message};window.onUpdateVersionChecked=function(raw){let result;try{result=JSON.parse(raw)}catch(e){status.textContent='Phản hồi kiểm tra phiên bản không hợp lệ.';return}if(!result.ok){status.textContent='Không kiểm tra được phiên bản: '+(result.error||'Lỗi không rõ');return}const current='v'+(result.installedName||result.installedCode),remote='v'+(result.driveName||result.driveCode);if(!result.hasUpdate){status.textContent='Bạn đang dùng phiên bản mới nhất ('+current+').';return}status.textContent='Có phiên bản mới '+remote+' (đang dùng '+current+').'+(result.description?'\\n'+result.description:'');actionsEl.innerHTML='';const download=document.createElement('button');download.textContent='Mở Drive tải APK';download.onclick=()=>{closeDialog();try{AndroidBridge.openUpdateUrl()}catch(e){openDialog('Cập nhật','Không mở được Google Drive: '+e.message)}};actionsEl.appendChild(download);const close=document.createElement('button');close.textContent='Đóng';close.onclick=closeDialog;actionsEl.appendChild(close)};try{AndroidBridge.checkUpdateVersion()}catch(e){status.textContent='Không kiểm tra được phiên bản: '+e.message}}
