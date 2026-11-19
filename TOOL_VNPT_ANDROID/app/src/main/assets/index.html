@@ -151,13 +151,16 @@ async function detectAndOpenModem(event){
     const base='https://192.168.1.1';
     // G040H yêu cầu header gần giống trình duyệt Chrome Android mới trả trang đăng nhập HTTP 200.
     const browserHeaders={
-      'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language':'vi,en-US;q=0.9,en;q=0.8',
-      'User-Agent':'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36',
+      'User-Agent':'Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36',
+      'sec-ch-ua':'\"Not-A.Brand\";v=\"99\", \"Google Chrome\";v=\"157\", \"Chromium\";v=\"157\"',
+      'sec-ch-ua-mobile':'?1',
+      'sec-ch-ua-platform':'\"Android\"',
       'Upgrade-Insecure-Requests':'1'
     };
     status.textContent='Đang đọc trang chủ modem…';
-    let root=await window.nativeHttps(base+'/',{method:'GET',modem:true,headers:browserHeaders});
+    let root=await window.nativeHttps(base+'/',{method:'GET',modem:true,headers:{...browserHeaders,'Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'none','Sec-Fetch-User':'?1','Cache-Control':'max-age=0'}});
     let rootText=String(await root.text());
     if(/AX3000\s+Wireless\s+Dual-Band\s+GPON\s+ONT/i.test(rootText) || /AX3000/i.test(rootText)){
       status.textContent='Đã nhận diện NS V2. Đang mở trang cấu hình…';
@@ -165,7 +168,7 @@ async function detectAndOpenModem(event){
       return;
     }
     status.textContent='Đang kiểm tra trang đăng nhập…';
-    const login=await window.nativeHttps(base+'/cgi-bin/login.asp',{method:'GET',modem:true,headers:{...browserHeaders,'Referer':base+'/'}});
+    const login=await window.nativeHttps(base+'/cgi-bin/login.asp',{method:'GET',modem:true,headers:{...browserHeaders,'Referer':base+'/','Sec-Fetch-Dest':'document','Sec-Fetch-Mode':'navigate','Sec-Fetch-Site':'same-origin'}});
     const loginText=String(await login.text());
     if(/iGate\s+GW020-H/i.test(loginText)){
       status.textContent='Đã nhận diện G040H (iGate GW020-H). Đang mở trang cấu hình…';
