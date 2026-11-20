@@ -400,6 +400,33 @@ public final class WebBridge {
         }
     }
 
+    /** Mở một URL bất kỳ từ JavaScript bằng trình duyệt/ứng dụng phù hợp. */
+    @JavascriptInterface
+    public void openUrl(String url) {
+        try {
+            if (url == null || url.trim().isEmpty()) {
+                diag("WEB", "Bỏ qua yêu cầu mở URL rỗng");
+                return;
+            }
+
+            Uri uri = Uri.parse(url.trim());
+            String scheme = uri.getScheme();
+            if (scheme == null ||
+                    (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                diag("WEB!", "URL không hợp lệ hoặc không được hỗ trợ: " + url);
+                return;
+            }
+
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            webView.getContext().startActivity(intent);
+            diag("WEB", "Đã yêu cầu mở URL: " + uri);
+        } catch (Exception e) {
+            Log.e("WebBridge", "Không mở được URL", e);
+            diag("WEB!", "Không mở được URL: " + Log.getStackTraceString(e));
+        }
+    }
+
     @JavascriptInterface
     public String version() {
         return "TOOL_VNPT_ANDROID/1.1.1";
