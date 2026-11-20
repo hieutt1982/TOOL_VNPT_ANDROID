@@ -704,6 +704,11 @@ let lastLogs = [];
 let rawLogs = [];
 let lastResult = null;
 let currentToken = null;
+function nsv1SessionKey(ip){return `vnpt_session_nsv1_${String(ip||"").trim()}`;}
+function saveNsv1Session(ip,token){try{if(ip&&token)localStorage.setItem(nsv1SessionKey(ip),JSON.stringify({ecntToken:String(token),updatedAt:Date.now()}));}catch(e){console.log("Không lưu được ecntToken NS V1:",e.message);}}
+function loadNsv1Session(ip){try{const raw=localStorage.getItem(nsv1SessionKey(ip));if(!raw)return null;const data=JSON.parse(raw);return data&&data.ecntToken?String(data.ecntToken):null;}catch(e){return null;}}
+function clearNsv1Session(ip){try{localStorage.removeItem(nsv1SessionKey(ip));}catch(e){}}
+function nsv1AuthFailure(e){return /HTTP\s*(401|403)|unauthorized|forbidden|đăng nhập|phiên.*hết|không tìm thấy token|không lấy được csrf|lỗi lấy token/i.test(String(e&&e.message||e||""));}
 
 function log(message) {
   const line=`[${new Date().toLocaleTimeString("vi-VN", {hour12:false})}]\n${String(message)}`; rawLogs.push(line); if(rawLogs.length>250) rawLogs=rawLogs.slice(-250);
@@ -765,8 +770,20 @@ function clean(v, fallback = "") {
   return v === undefined || v === null ? fallback : String(v).trim();
 }
 
+async function runNsv1WithAuthRetry(label, action, password) {
+  try { return await action(); }
+  catch (error) {
+    if (!nsv1AuthFailure(error)) throw error;
+    stepLog(`${label}: phiên NS V1 không còn hợp lệ — đăng nhập lại một lần.`);
+    const fresh = await login_and_get_etoken(USERNAME, password);
+    if (!fresh) throw new Error(`${label}: đăng nhập lại NS V1 thất bại.`);
+    currentToken = fresh;
+    saveNsv1Session(MODEM_IP, fresh);
+    return action();
+  }
+}
+
 async function configureModem(cfg) {
-  // Mỗi lần chạy phải bắt đầu bằng token sạch; token trước thuộc phiên modem cũ.
   currentToken = null;
   const warnings = [];
   MODEM_IP = clean(cfg.ip, "192.168.1.1");
@@ -801,8 +818,9 @@ async function configureModem(cfg) {
   stepLog("Bắt đầu cấu hình modem");
   stepLog("1/4 Login: đang xử lý");
   let token;
-  await timedStep("Login", async () => {
+  await timedStep("Phiên đăng nhập", async () => {
     if (mode === "1") {
+      clearNsv1Session(MODEM_IP);
       token = await login_and_get_etoken(USERNAME, "admin");
       if (!token) throw new Error("LOGIN admin/admin FAIL");
       stepLog("1/4 Login: POST đổi mật khẩu mặc định, sau đó đăng nhập lại");
@@ -811,18 +829,29 @@ async function configureModem(cfg) {
       token = await login_and_get_etoken(USERNAME, PASSWORD_NEW);
       if (!token) throw new Error("LOGIN LẠI BẰNG PASS MỚI FAIL");
       PASSWORD = PASSWORD_NEW;
+      currentToken = token;
+      saveNsv1Session(MODEM_IP, token);
     } else {
-      token = await login_and_get_etoken(USERNAME, PASSWORD);
-      if (!token) throw new Error("LOGIN FAIL");
+      token = loadNsv1Session(MODEM_IP);
+      if (token) {
+        const check = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
+        if (!check) { stepLog("Phiên NS V1 trong LocalStorage đã hết hạn hoặc không hợp lệ."); token = null; clearNsv1Session(MODEM_IP); }
+        else stepLog("Phiên NS V1 còn hiệu lực — dùng token đã lưu, không login lại.");
+      }
+      if (!token) {
+        token = await login_and_get_etoken(USERNAME, PASSWORD);
+        if (!token) throw new Error("LOGIN FAIL");
+        saveNsv1Session(MODEM_IP, token);
+      }
+      currentToken = token;
     }
   });
-  currentToken = token;
   stepLog("1/4 Đăng nhập modem: xong");
   await sleep(1000);
 
   if (cfg.doSlid) {
     stepLog("2/4 SLID: GET CSRF rồi POST cấu hình");
-    await timedStep("SLID", () => set_slid(token, slid_gpon));
+    await timedStep("SLID", () => runNsv1WithAuthRetry("SLID", () => set_slid(currentToken, slid_gpon), PASSWORD));
     stepLog("2/4 SLID: xong");
   } else stepLog("2/4 SLID: bỏ qua");
   await sleep(1000);
@@ -830,7 +859,7 @@ async function configureModem(cfg) {
   if (cfg.doPppoe) {
     stepLog("3/4 PPPoE: GET danh sách WAN/CSRF rồi POST tạo mới");
     try {
-      const created = await timedStep("PPPoE", () => wan_new_pppoe(token, user_pppoe, pass_pppoe, vlan_id));
+      const created = await timedStep("PPPoE", () => runNsv1WithAuthRetry("PPPoE", () => wan_new_pppoe(currentToken, user_pppoe, pass_pppoe, vlan_id), PASSWORD));
       stepLog(created ? "3/4 PPPoE: xong" : `3/4 PPPoE: VLAN ${vlan_id} đã có, giữ nguyên`);
     } catch (err) {
       const warning = `PPPoE không hoàn tất: ${err.message || err}`;
@@ -844,11 +873,9 @@ async function configureModem(cfg) {
   if (cfg.doWifi5g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 5 GHz: lấy CSRF rồi POST cấu hình");
     try {
-      await timedStep("Wi-Fi 5 GHz", async () => {
-        const csrf5 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan11ac.asp`);
-        if (!csrf5) throw new Error("Lỗi lấy token Wi-Fi 5G");
-        await config_wifi_5g(token, name_wifi_5g, pass_wifi_5g, csrf5);
-      });
+      await timedStep("Wi-Fi 5 GHz", () =>
+        runNsv1WithAuthRetry("Wi-Fi 5 GHz", () => config_wifi_5g(currentToken, name_wifi_5g, pass_wifi_5g, null), PASSWORD)
+      );
       stepLog("4/4 Wi-Fi 5 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 5 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
@@ -860,11 +887,9 @@ async function configureModem(cfg) {
   if (cfg.doWifi2g || cfg.doWifi) {
     stepLog("4/4 Wi-Fi 2.4 GHz: lấy CSRF rồi POST cấu hình");
     try {
-      await timedStep("Wi-Fi 2.4 GHz", async () => {
-        const csrf2 = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/net-wlan.asp`);
-        if (!csrf2) throw new Error("Lỗi lấy token Wi-Fi 2.4G");
-        await config_wifi_2g(token, name_wifi_2g, pass_wifi_2g, csrf2);
-      });
+      await timedStep("Wi-Fi 2.4 GHz", () =>
+        runNsv1WithAuthRetry("Wi-Fi 2.4 GHz", () => config_wifi_2g(currentToken, name_wifi_2g, pass_wifi_2g, null), PASSWORD)
+      );
       stepLog("4/4 Wi-Fi 2.4 GHz: đã nhận phản hồi");
     } catch (err) {
       const warning = `Wi-Fi 2.4 GHz: chưa nhận được xác nhận từ modem (${err.message || err})`;
@@ -878,7 +903,6 @@ async function configureModem(cfg) {
 }
 
 async function resetModemToDefault(cfg) {
-  // Chế độ 3 cũng bắt đầu bằng phiên đăng nhập sạch như cấu hình thường.
   currentToken = null;
   MODEM_IP = clean(cfg.ip, "192.168.1.1");
   USERNAME = clean(cfg.username, "admin");
@@ -886,19 +910,50 @@ async function resetModemToDefault(cfg) {
   if (net.isIP(MODEM_IP) !== 4) throw new Error("IP modem phải là địa chỉ IPv4 hợp lệ.");
   if (!PASSWORD) throw new Error("Chưa nhập mật khẩu hiện tại của modem.");
   stepLog("Bắt đầu khôi phục cấu hình mặc định NS V1");
-  const token = await timedStep("Đăng nhập modem bằng mật khẩu hiện tại", async () => {
-    const value = await login_and_get_etoken(USERNAME, PASSWORD);
-    if (!value) throw new Error("Đăng nhập thất bại. Kiểm tra mật khẩu hiện tại.");
-    return value;
-  });
+  let token = loadNsv1Session(MODEM_IP);
+  if (token) {
+    const check = await get_csrf_token_from_page(token, `https://${MODEM_IP}/cgi-bin/mag-reset.asp`);
+    if (check) stepLog("Đã khôi phục phiên NS V1 từ LocalStorage; không login lại.");
+    else { token = null; clearNsv1Session(MODEM_IP); }
+  }
+  if (!token) {
+    token = await timedStep("Login modem bằng mật khẩu hiện tại", async () => {
+      const value = await login_and_get_etoken(USERNAME, PASSWORD);
+      if (!value) throw new Error("Đăng nhập thất bại. Kiểm tra mật khẩu hiện tại.");
+      return value;
+    });
+    saveNsv1Session(MODEM_IP, token);
+  }
+  currentToken = token;
   const path = "/cgi-bin/mag-reset.asp";
-  const csrf = await get_csrf_token_from_page(token, `https://${MODEM_IP}${path}`);
+  let csrf = await get_csrf_token_from_page(currentToken, `https://${MODEM_IP}${path}`);
+  if (!csrf) {
+    stepLog("Phiên NS V1 không hợp lệ; login lại và thử API reset một lần.");
+    currentToken = await login_and_get_etoken(USERNAME, PASSWORD);
+    if (!currentToken) throw new Error("Đăng nhập lại thất bại khi reset NS V1.");
+    saveNsv1Session(MODEM_IP, currentToken);
+    csrf = await get_csrf_token_from_page(currentToken, `https://${MODEM_IP}${path}`);
+  }
   if (!csrf) throw new Error("Không lấy được CSRF token trang reset NS V1.");
   stepLog("Đã lấy CSRF trang reset; gửi lệnh khôi phục mặc định");
-  await postModemForm(path, {
-    testFlag: "0", restoreFlag: "2", rebootFlag: "1", login_init: "0", CsrfToken: csrf
-  }, token);
-  stepLog("Modem đã nhận lệnh reset mặc định (HTTP phản hồi thành công); modem sẽ khởi động lại.");
+  try {
+    await postModemForm(path, {
+      testFlag: "0", restoreFlag: "2", rebootFlag: "1", login_init: "0", CsrfToken: csrf
+    }, currentToken);
+  } catch (error) {
+    if (!nsv1AuthFailure(error)) throw error;
+    stepLog("API reset báo lỗi xác thực — login lại một lần và gửi lại lệnh reset.");
+    currentToken = await login_and_get_etoken(USERNAME, PASSWORD);
+    if (!currentToken) throw new Error("Đăng nhập lại thất bại khi gửi API reset NS V1.");
+    saveNsv1Session(MODEM_IP, currentToken);
+    csrf = await get_csrf_token_from_page(currentToken, `https://${MODEM_IP}${path}`);
+    if (!csrf) throw new Error("Không lấy được CSRF sau khi login lại NS V1.");
+    await postModemForm(path, {
+      testFlag: "0", restoreFlag: "2", rebootFlag: "1", login_init: "0", CsrfToken: csrf
+    }, currentToken);
+  }
+  clearNsv1Session(MODEM_IP); currentToken = null;
+  stepLog("Modem đã nhận lệnh reset mặc định; đã xóa phiên cũ khỏi LocalStorage và modem sẽ khởi động lại.");
   return { ok: true, reset: true, ip: MODEM_IP };
 }
 

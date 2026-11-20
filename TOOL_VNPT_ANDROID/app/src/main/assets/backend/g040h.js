@@ -17,6 +17,12 @@ let rawLogs = [];
 let lastResult = null;
 let activeIp = "";
 let cookies = {};
+let activePassword = "";
+function g040hSessionKey(ip){return `vnpt_session_g040h_${String(ip||"").trim()}`;}
+function saveG040HSession(){try{if(activeIp&&cookies.md5)localStorage.setItem(g040hSessionKey(activeIp),JSON.stringify({cookies,updatedAt:Date.now()}));}catch(e){log("Không lưu được Cookie G040H vào LocalStorage: "+e.message);}}
+function loadG040HSession(ip){try{const raw=localStorage.getItem(g040hSessionKey(ip));if(!raw)return false;const data=JSON.parse(raw);if(!data||!data.cookies||typeof data.cookies!=="object")return false;cookies={...data.cookies};log("Đã khôi phục Cookie G040H từ LocalStorage.");return !!cookies.md5;}catch(e){return false;}}
+function clearG040HSession(ip){try{localStorage.removeItem(g040hSessionKey(ip));}catch(e){}}
+function isG040HAuthError(e){return /AUTH_SESSION_EXPIRED|HTTP\s*(401|403)|unauthorized|forbidden|phiên.*hết/i.test(String(e&&e.message||e||""));}
 let agent = createModemAgent();
 
 function createModemAgent() {
@@ -81,6 +87,7 @@ function parseCookieHeaders(headers) {
     const i = first.indexOf("=");
     if (i > 0) cookies[first.slice(0, i).trim()] = first.slice(i + 1).trim();
   }
+  saveG040HSession();
 }
 function cookieHeader() {
   return Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
@@ -92,6 +99,7 @@ function rememberJavascriptAuth(html) {
   if (m && m[1]) {
     cookies.md5 = m[1];
     delete cookies.base64;
+    saveG040HSession();
   }
 }
 function setLoginBase64Cookie(username, password) {
@@ -215,13 +223,19 @@ function pageHeaders(path) {
   };
 }
 async function getPage(path) {
-  const r = await modemRequest("GET", path, "", pageHeaders(path));
+  const r = await withG040HSessionRetry(`GET ${path}`, () => modemRequest("GET", path, "", pageHeaders(path)));
+  if (r.status === 401 || r.status === 403 || isLoginPage(r.text)) throw new Error("AUTH_SESSION_EXPIRED: modem yêu cầu đăng nhập lại.");
   if (r.status >= 400) throw new Error(`GET ${path} trả HTTP ${r.status}`);
   return r.text;
 }
 async function postPage(path, payload) {
   const body = formEncode(payload);
-  return modemRequest("POST", path, body, pageHeaders(path));
+  const send = () => modemRequest("POST", path, body, pageHeaders(path));
+  let r = path.toLowerCase() === "/cgi-bin/login.asp" ? await send() : await withG040HSessionRetry(`POST ${path}`, send);
+  if (path.toLowerCase() !== "/cgi-bin/login.asp" && (r.status === 401 || r.status === 403 || isLoginPage(r.text))) {
+    throw new Error("AUTH_SESSION_EXPIRED: modem từ chối Cookie xác thực.");
+  }
+  return r;
 }
 function csrfFrom(html) {
   const patterns = [
@@ -1644,32 +1658,43 @@ async function loginDefaultAndChangePassword(newPassword) {
   log("Đăng nhập lại thành công — đã nhận cookie xác thực modem");
 }
 async function ensureSession(newPassword) {
-  let r;
-  try {
-    r = await modemRequest("GET", "/cgi-bin/index.asp", "", pageHeaders("/cgi-bin/index.asp"));
-  } catch (_) {
-    r = { status: 0, text: "" };
-  }
-  if (r.status >= 400 || isLoginPage(r.text) || !cookies.md5) {
-    log("Phiên đăng nhập đã hết hoặc modem vừa khởi động lại — đăng nhập lại");
-    cookies = {};
-    await modemRequest("GET", "/cgi-bin/login.asp");
-    setLoginBase64Cookie("admin", newPassword);
-    log("Đã tạo cookie base64 cho phiên đăng nhập lại");
-    const login = await postPage("/cgi-bin/login.asp", {
-      StatusActionFlag: "",
-      Auth_LoginID: "admin",
-      Auth_Password: newPassword
-    });
-    if (login.status >= 400) throw new Error(`Đăng nhập lại sau khởi động thất bại: HTTP ${login.status}`);
-    const idx = await modemRequest("GET", "/cgi-bin/index.asp", "", {
-      "Referer": `https://${activeIp}/cgi-bin/login.asp`,
-      "Origin": `https://${activeIp}`
-    });
-    if (idx.status >= 400 || isLoginPage(idx.text) || !cookies.md5) {
-      throw new Error("Không khôi phục được phiên đăng nhập modem");
+  activePassword = String(newPassword || activePassword || "");
+  if (!cookies.md5) loadG040HSession(activeIp);
+  if (cookies.md5) {
+    // Chỉ kiểm tra phiên bằng GET trang nội bộ; lỗi mạng/timeout không bị hiểu nhầm là hết hạn.
+    const check = await modemRequest("GET", "/cgi-bin/index.asp", "", pageHeaders("/cgi-bin/index.asp"));
+    if (check.status < 400 && !isLoginPage(check.text) && cookies.md5) {
+      log("Phiên G040H trong LocalStorage còn hiệu lực — tiếp tục dùng, không login lại.");
+      saveG040HSession();
+      return;
     }
-    log("Đăng nhập lại thành công");
+    log("Phiên G040H không còn hợp lệ — xóa phiên cũ và login lại.");
+    clearG040HSession(activeIp);
+    cookies = {};
+  } else {
+    log("LocalStorage chưa có Cookie G040H hợp lệ — cần login.");
+  }
+  if (!activePassword) throw new Error("Cần mật khẩu hiện tại để đăng nhập lại G040H.");
+  await loginWithCurrentPassword(activePassword);
+  if (!cookies.md5) throw new Error("Login G040H không tạo được Cookie md5.");
+  saveG040HSession();
+}
+async function withG040HSessionRetry(label, action) {
+  const run = async () => {
+    const result = await action();
+    if (result && (result.status === 401 || result.status === 403 || isLoginPage(result.text))) {
+      throw new Error("AUTH_SESSION_EXPIRED: modem từ chối phiên Cookie.");
+    }
+    return result;
+  };
+  try { return await run(); }
+  catch (error) {
+    if (!isG040HAuthError(error)) throw error;
+    log(`${label}: phiên G040H hết hạn — login lại một lần rồi thử lại API.`);
+    clearG040HSession(activeIp); cookies = {};
+    await loginWithCurrentPassword(activePassword);
+    saveG040HSession();
+    return run();
   }
 }
 
@@ -1707,7 +1732,8 @@ async function resetModemToDefault(cfg) {
     const password = String(cfg.password || "");
     if (!password) throw new Error("Chưa nhập mật khẩu hiện tại của modem.");
     stepLog("Bắt đầu khôi phục cấu hình mặc định G040H");
-    await timedStep("Đăng nhập modem bằng mật khẩu hiện tại", () => loginWithCurrentPassword(password));
+    activePassword = password;
+    await timedStep("Kiểm tra phiên đăng nhập", () => ensureSession(password));
     const path = "/cgi-bin/tools_system.asp";
     const html = await getPage(path);
     const csrf = csrfFrom(html);
@@ -1717,6 +1743,8 @@ async function resetModemToDefault(cfg) {
     if (response.status >= 400) throw new Error(`Reset modem thất bại: HTTP ${response.status}`);
     stepLog(`Modem đã nhận lệnh khôi phục mặc định (HTTP ${response.status}); modem sẽ khởi động lại.`);
     lastResult = { ok: true, reset: true, ip: activeIp };
+    clearG040HSession(activeIp);
+    stepLog("Đã xóa Cookie G040H cũ khỏi LocalStorage sau khi reset thành công.");
   } catch (e) {
     lastResult = { ok: false, error: e.message || String(e) };
     stepLog("LỖI RESET:", lastResult.error);
@@ -1788,10 +1816,16 @@ async function configureModem(cfg) {
   activeIp = cfg.ip;
   lastResult = null;
   stepLog("Bắt đầu cấu hình modem");
-  stepLog(cfg.loginMode === "1" ? "1/4 Login: GET / và login.asp → POST đăng nhập → GET/POST đổi mật khẩu → đăng nhập lại" : "1/4 Login: GET / và login.asp → POST xác thực mật khẩu hiện tại");
-  await timedStep("Login", async () => {
-    if (cfg.loginMode === "1") await loginDefaultAndChangePassword(cfg.password);
-    else await loginWithCurrentPassword(cfg.password);
+  activePassword = String(cfg.password || "");
+  stepLog(cfg.loginMode === "1" ? "1/4 Login: modem mới — đăng nhập mặc định, đổi mật khẩu, login lại và lưu Cookie" : "1/4 Login: đọc Cookie LocalStorage; chỉ login nếu chưa có hoặc phiên hết hạn");
+  await timedStep("Phiên đăng nhập", async () => {
+    if (cfg.loginMode === "1") {
+      clearG040HSession(activeIp); cookies = {};
+      await loginDefaultAndChangePassword(cfg.password);
+      saveG040HSession();
+    } else {
+      await ensureSession(cfg.password);
+    }
   });
   stepLog("1/4 Đăng nhập modem: xong");
   await sleep(1000);

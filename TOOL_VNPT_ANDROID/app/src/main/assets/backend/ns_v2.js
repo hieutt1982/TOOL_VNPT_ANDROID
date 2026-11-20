@@ -25,6 +25,12 @@ let logs=[];
 let rawLogs=[];
 let currentIP="";
 let lastResult=null;
+let sessionPassword="";
+function sessionStorageKey(ip){return `vnpt_session_nsv2_${String(ip||"").trim()}`;}
+function saveStoredSession(ip){try{if(!ip||!session_key)return;localStorage.setItem(sessionStorageKey(ip),JSON.stringify({sessionKey:session_key,cookies,updatedAt:Date.now()}));}catch(e){log("Không lưu được phiên NS V2 vào LocalStorage: "+e.message);}}
+function loadStoredSession(ip){try{const raw=localStorage.getItem(sessionStorageKey(ip));if(!raw)return false;const saved=JSON.parse(raw);if(!saved||!saved.sessionKey)return false;session_key=String(saved.sessionKey);cookies=saved.cookies&&typeof saved.cookies==="object"?saved.cookies:{};log("Đã khôi phục phiên NS V2 từ LocalStorage.");return true;}catch(e){return false;}}
+function clearStoredSession(ip){try{localStorage.removeItem(sessionStorageKey(ip));}catch(e){}}
+function isAuthFailure(errorOrText){const v=String(errorOrText&&errorOrText.message||errorOrText||"");return /HTTP\s*(401|403)|fail authen|unauthori[sz]ed|forbidden|login page|đăng nhập lại|phiên.*hết|session.*expired/i.test(v);}
 const MAX_LOGS=500;
 
 function log(...a){
@@ -50,6 +56,7 @@ function storeCookies(headers){
     const first=c.split(";")[0], i=first.indexOf("=");
     if(i>0) cookies[first.slice(0,i)] = first.slice(i+1);
   }
+  if(currentIP&&session_key) saveStoredSession(currentIP);
 }
 function cookieHeader(){return Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join("; ");}
 function formEncode(obj){
@@ -111,7 +118,8 @@ async function loginNormal(ip,password){
   if(result.status!=="OK") throw new Error(`LOGIN FAIL: modem trả status=${result.status||"không rõ"}`);
   session_key=result.sessionKey;
   if(!session_key) throw new Error("LOGIN OK nhưng modem không trả sessionKey.");
-  log("LOGIN OK");
+  saveStoredSession(ip);
+  log("LOGIN OK; đã lưu sessionKey và Cookie vào LocalStorage.");
 }
 async function loginFirstReset(ip,newPassword){
   if(!newPassword) throw new Error("Chưa nhập PASS MODEM MỚI.");
@@ -144,7 +152,7 @@ async function loginFirstReset(ip,newPassword){
   log("[3] LOGIN LẠI BẰNG PASSWORD MỚI");
   await loginNormal(ip,newPassword);
 }
-async function api(ip,path,data,extraHeaders={}){
+async function api(ip,path,data,extraHeaders={},retried=false){
   if(!session_key) throw new Error("Chưa có sessionKey.");
   const base=`https://${ip}/cgi-bin/luci`;
   const payload={...data,sessionKey:session_key};
@@ -154,10 +162,21 @@ async function api(ip,path,data,extraHeaders={}){
     ...extraHeaders
   });
   log(`${path}: HTTP ${r.status}`);
+  let result=null;
+  try{result=JSON.parse(r.text);}catch(e){}
+  const authFailed=r.status===401||r.status===403||(result&&String(result.status||"").toLowerCase()==="fail authen")||/login\.html|login\.asp|unauthorized/i.test(r.text||"");
+  if(authFailed){
+    if(retried) throw new Error(`${path}: phiên xác thực không hợp lệ sau khi đăng nhập lại.`);
+    if(!sessionPassword) throw new Error(`${path}: phiên hết hạn; cần mật khẩu modem để đăng nhập lại.`);
+    log(`${path}: phiên NS V2 hết hạn — đăng nhập lại một lần rồi thử lại API.`);
+    session_key=null; cookies={};
+    await loginNormal(ip,sessionPassword);
+    return api(ip,path,data,extraHeaders,true);
+  }
   if(r.status<200||r.status>=300) throw new Error(`HTTP ${r.status}`);
-  let result; try{result=JSON.parse(r.text);}catch(e){throw new Error(`${path}: modem trả về không phải JSON: ${r.text.slice(0,300)}`);}
-  if(result.sessionKey){session_key=result.sessionKey;log("Đã làm mới phiên xác thực.");}
-  if(result.status==="fail authen") throw new Error(`${path}: fail authen`);
+  if(!result) throw new Error(`${path}: modem trả về không phải JSON: ${r.text.slice(0,300)}`);
+  if(result.sessionKey){session_key=result.sessionKey;saveStoredSession(ip);log("Modem cấp sessionKey mới; đã cập nhật LocalStorage.");}
+  else saveStoredSession(ip);
   return result;
 }
 async function setSlid(ip,slid){
@@ -194,7 +213,7 @@ async function setWifi(ip,unit,ssid,password){
   log(`WIFI ${band} OK`);
 }
 async function configure(o){
-  running=true; session_key=null; cookies={}; currentIP=o.ip; lastResult=null;
+  running=true; currentIP=String(o.ip||"").trim(); sessionPassword=String(o.modemPass||""); lastResult=null;
   const warnings=[];
   logs=[];
   try{
@@ -210,9 +229,16 @@ async function configure(o){
     if(doWifi5g&&(!o.wifi5g||String(o.pass5g||"").length<8)) throw new Error("Wi-Fi 5 GHz cần tên mạng và mật khẩu tối thiểu 8 ký tự.");
 
     stepLog(mode==="1"?"1/4 Login: POST login.cmd mặc định → POST đổi mật khẩu → POST đăng nhập lại":"1/4 Login: POST login.cmd xác thực");
-    await timedStep("Login",async()=>{
-      if(mode==="1") await loginFirstReset(o.ip,o.modemPass||"");
-      else await loginNormal(o.ip,o.modemPass||"");
+    await timedStep("Phiên đăng nhập",async()=>{
+      if(mode==="1"){
+        session_key=null; cookies={};
+        await loginFirstReset(o.ip,o.modemPass||"");
+      }else if(!loadStoredSession(o.ip)){
+        log("Không có phiên NS V2 trong LocalStorage — đăng nhập bằng mật khẩu hiện tại.");
+        await loginNormal(o.ip,o.modemPass||"");
+      }else{
+        log("Ưu tiên dùng sessionKey/Cookie đã lưu; sẽ tự login lại nếu API xác nhận phiên hết hạn.");
+      }
     });
     stepLog("1/4 Đăng nhập modem: xong");
     await sleep(1000);
@@ -262,24 +288,28 @@ async function configure(o){
     lastResult={ok:false,error:e.message||String(e)};
     stepLog("LỖI:",lastResult.error);
   }finally{
-    session_key=null; cookies={}; running=false;
+    if(session_key) saveStoredSession(currentIP);
+    running=false;
   }
 }
 async function resetModemToDefault(o){
-  running=true;session_key=null;cookies={};currentIP=o.ip;lastResult=null;logs=[];rawLogs=[];
+  running=true;currentIP=String(o.ip||"").trim();sessionPassword=String(o.modemPass||o.password||"");lastResult=null;logs=[];rawLogs=[];
   try{
     const ip=String(o.ip||"").trim(), password=String(o.modemPass||o.password||"");
     if(net.isIP(ip)!==4)throw new Error("IP modem phải là địa chỉ IPv4 hợp lệ.");
     if(!password)throw new Error("Chưa nhập mật khẩu hiện tại của modem.");
     stepLog("Bắt đầu khôi phục cấu hình mặc định NS V2");
-    await timedStep("Đăng nhập modem bằng mật khẩu hiện tại",()=>loginNormal(ip,password));
-    stepLog("Đăng nhập thành công; gửi POST restoresetting.cmd theo HAR");
+    sessionPassword=password;
+    if(!loadStoredSession(ip)){stepLog("Không có phiên NS V2 đã lưu — đăng nhập bằng mật khẩu hiện tại.");await timedStep("Login",()=>loginNormal(ip,password));}
+    else stepLog("Đã nạp phiên NS V2 từ LocalStorage; dùng phiên này gọi API reset.");
     const result=await api(ip,"restoresetting.cmd",{}, {"Referer":`https://${ip}/setting.html`});
     if(result.status!=="OK")throw new Error(`Modem không xác nhận reset (status=${result.status||"không rõ"}).`);
     stepLog("Modem đã nhận lệnh khôi phục mặc định; modem sẽ khởi động lại.");
     lastResult={ok:true,reset:true};
+    clearStoredSession(ip); session_key=null; cookies={};
+    stepLog("Đã xóa phiên NS V2 cũ khỏi LocalStorage sau khi reset thành công.");
   }catch(e){lastResult={ok:false,error:e.message||String(e)};stepLog("LỖI RESET:",lastResult.error);}
-  finally{session_key=null;cookies={};running=false;}
+  finally{running=false;}
 }
 function json(res,obj,status=200){
   const b=Buffer.from(JSON.stringify(obj));
