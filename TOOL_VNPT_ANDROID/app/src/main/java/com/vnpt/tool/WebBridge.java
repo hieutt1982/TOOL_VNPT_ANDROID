@@ -1,5 +1,6 @@
 package com.vnpt.tool;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -429,7 +430,29 @@ public final class WebBridge {
 
     @JavascriptInterface
     public String version() {
-        return "TOOL_VNPT_ANDROID/1.1.1";
+        try {
+            android.content.pm.PackageInfo info = webView.getContext().getPackageManager()
+                    .getPackageInfo(webView.getContext().getPackageName(), 0);
+            long code = android.os.Build.VERSION.SDK_INT >= 28
+                    ? info.getLongVersionCode() : info.versionCode;
+            return info.versionName + " (" + code + ")";
+        } catch (Exception e) {
+            diag("APP!", "Không đọc được phiên bản APK: " + e.getMessage());
+            return "Không rõ";
+        }
+    }
+
+    /** Đăng xuất khỏi WebView và đóng Activity chứa ứng dụng. */
+    @JavascriptInterface
+    public void closeApp() {
+        webView.post(() -> {
+            Context context = webView.getContext();
+            if (context instanceof Activity) {
+                ((Activity) context).finishAffinity();
+            } else {
+                diag("APP!", "Không thể đóng APK vì WebView không gắn với Activity");
+            }
+        });
     }
 
     private String safeHeaders(JSONObject headers) {
