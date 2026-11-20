@@ -88,8 +88,7 @@ public final class WebBridge {
                     String name = names.next();
                     requestBuilder.header(name, headers.optString(name, ""));
                 }
-                // Force each modem exchange to finish its TCP/TLS socket. The
-                // modem may reboot or close keep-alive sockets after a POST.
+                // Keep the modem connection alive for firmware compatibility.
                 if (modem) requestBuilder.header("Connection", "close");
 
                 if ("GET".equals(httpMethod) || "HEAD".equals(httpMethod)) {
@@ -363,21 +362,41 @@ public final class WebBridge {
         diag("UPDATE", message);
     }
 
+    /**
+     * Mở link tải APK trực tiếp bằng Chrome.
+     * Vẫn lấy file ID từ version.json đã được kiểm tra ở checkUpdateVersion(),
+     * không thay đổi quy trình kiểm tra phiên bản hiện tại.
+     */
     @JavascriptInterface
     public void openUpdateUrl() {
         String apkId = latestUpdateApkFileId;
-        if (apkId == null || apkId.isEmpty()) {
+        if (apkId == null || apkId.trim().isEmpty()) {
             diag("UPDATE!", "Chưa có ID APK. Hãy kiểm tra cập nhật trước.");
             return;
         }
-        String url = "https://drive.google.com/file/d/" + Uri.encode(apkId) + "/view?usp=sharing";
+
+        String url = "https://drive.usercontent.google.com/download?id="
+                + Uri.encode(apkId.trim())
+                + "&export=download&authuser=0";
+
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            Uri downloadUri = Uri.parse(url);
+            Intent intent = new Intent(Intent.ACTION_VIEW, downloadUri);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            webView.getContext().startActivity(intent);
-            diag("UPDATE", "Đã mở link Google Drive để người dùng tải APK");
+
+            // Ưu tiên mở Chrome. Nếu máy không cài Chrome thì mở trình duyệt mặc định.
+            intent.setPackage("com.android.chrome");
+            try {
+                webView.getContext().startActivity(intent);
+                diag("UPDATE", "Đã mở Chrome bằng link tải APK trực tiếp: " + url);
+            } catch (Exception chromeError) {
+                Intent fallbackIntent = new Intent(Intent.ACTION_VIEW, downloadUri);
+                fallbackIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                webView.getContext().startActivity(fallbackIntent);
+                diag("UPDATE", "Chrome không khả dụng; đã mở trình duyệt mặc định bằng link tải APK trực tiếp");
+            }
         } catch (Exception e) {
-            diag("UPDATE!", "Không mở được link Google Drive: " + Log.getStackTraceString(e));
+            diag("UPDATE!", "Không mở được link tải APK: " + Log.getStackTraceString(e));
         }
     }
 
